@@ -5443,6 +5443,59 @@ namespace TMPro
 
         }
 
+        /// <summary>
+        /// Mattish optimization. Store vertex attributes into the appropriate TMP_MeshInfo.
+        /// </summary>
+        /// <param name="i"></param>
+        /// <param name="index_X4"></param>
+        protected virtual void FillCharacterVertexBuffers2(ref TMP_CharacterInfo characterInfo, ref TMP_MeshInfo meshInfo)
+        {
+            int index_X4 = meshInfo.vertexCount;
+
+            // Check to make sure our current mesh buffer allocations can hold these new Quads.
+            if(index_X4 >= meshInfo.vertices.Length)
+            {
+                meshInfo.ResizeMeshInfo(Mathf.NextPowerOfTwo((index_X4 + 4) / 4));
+            }
+
+            characterInfo.vertexIndex = index_X4;
+
+            // Setup Vertices for Characters
+            meshInfo.vertices[0 + index_X4] = characterInfo.vertex_BL.position;
+            meshInfo.vertices[1 + index_X4] = characterInfo.vertex_TL.position;
+            meshInfo.vertices[2 + index_X4] = characterInfo.vertex_TR.position;
+            meshInfo.vertices[3 + index_X4] = characterInfo.vertex_BR.position;
+
+            // Setup UVS0
+            meshInfo.uvs0[0 + index_X4] = characterInfo.vertex_BL.uv;
+            meshInfo.uvs0[1 + index_X4] = characterInfo.vertex_TL.uv;
+            meshInfo.uvs0[2 + index_X4] = characterInfo.vertex_TR.uv;
+            meshInfo.uvs0[3 + index_X4] = characterInfo.vertex_BR.uv;
+
+            // Setup UVS2
+            meshInfo.uvs2[0 + index_X4] = characterInfo.vertex_BL.uv2;
+            meshInfo.uvs2[1 + index_X4] = characterInfo.vertex_TL.uv2;
+            meshInfo.uvs2[2 + index_X4] = characterInfo.vertex_TR.uv2;
+            meshInfo.uvs2[3 + index_X4] = characterInfo.vertex_BR.uv2;
+            
+            // setup Vertex Colors
+            if(m_ConvertToLinearSpace)
+            {
+                meshInfo.colors32[0 + index_X4] = characterInfo.vertex_BL.color.GammaToLinear();
+                meshInfo.colors32[1 + index_X4] = characterInfo.vertex_TL.color.GammaToLinear();
+                meshInfo.colors32[2 + index_X4] = characterInfo.vertex_TR.color.GammaToLinear();
+                meshInfo.colors32[3 + index_X4] = characterInfo.vertex_BR.color.GammaToLinear();
+            }
+            else
+            {
+                meshInfo.colors32[0 + index_X4] = characterInfo.vertex_BL.color;
+                meshInfo.colors32[1 + index_X4] = characterInfo.vertex_TL.color;
+                meshInfo.colors32[2 + index_X4] = characterInfo.vertex_TR.color;
+                meshInfo.colors32[3 + index_X4] = characterInfo.vertex_BR.color;
+            }
+
+            meshInfo.vertexCount = index_X4 + 4;
+        }
 
         /// <summary>
         /// Store vertex attributes into the appropriate TMP_MeshInfo.

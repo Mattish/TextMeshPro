@@ -521,6 +521,9 @@ namespace TMPro
         private static ProfilerMarker k_CharacterLookupMarker = new ProfilerMarker("TMP Lookup Character & Glyph Data");
         private static ProfilerMarker k_HandleGPOSFeaturesMarker = new ProfilerMarker("TMP Handle GPOS Features");
         private static ProfilerMarker k_CalculateVerticesPositionMarker = new ProfilerMarker("TMP Calculate Vertices Position");
+        private static ProfilerMarker k_Matt1Marker = new ProfilerMarker("TMP Matt - 1");
+        private static ProfilerMarker k_Matt2Marker = new ProfilerMarker("TMP Matt - 2");
+        private static ProfilerMarker k_Matt3Marker = new ProfilerMarker("TMP Matt - 3");
         private static ProfilerMarker k_ComputeTextMetricsMarker = new ProfilerMarker("TMP Compute Text Metrics");
         private static ProfilerMarker k_HandleVisibleCharacterMarker = new ProfilerMarker("TMP Handle Visible Character");
         private static ProfilerMarker k_HandleWhiteSpacesMarker = new ProfilerMarker("TMP Handle White Space & Control Character");
@@ -2084,6 +2087,458 @@ namespace TMPro
             }
         }
 
+        protected virtual void SaveGlyphVertexInfo2(ref TMP_CharacterInfo character, float padding, float style_padding, Color32 vertexColor)
+        {
+            // Save the Vertex Position for the Character
+            #region Setup Mesh Vertices
+            character.vertex_BL.position = character.bottomLeft;
+            character.vertex_TL.position = character.topLeft;
+            character.vertex_TR.position = character.topRight;
+            character.vertex_BR.position = character.bottomRight;
+            #endregion
+
+
+            #region Setup Vertex Colors
+            // Alpha is the lower of the vertex color or tag color alpha used.
+            vertexColor.a = m_fontColor32.a < vertexColor.a ? m_fontColor32.a : vertexColor.a;
+
+            #if TEXTCORE_FONT_ENGINE_1_5_OR_NEWER
+            bool isColorGlyph = ((GlyphRasterModes)m_currentFontAsset.m_AtlasRenderMode & GlyphRasterModes.RASTER_MODE_COLOR) == GlyphRasterModes.RASTER_MODE_COLOR;
+            #else
+            bool isColorGlyph = false;
+            #endif
+
+            // Handle Vertex Colors & Vertex Color Gradient
+            if (!m_enableVertexGradient || isColorGlyph)
+            {
+                // Special handling for color glyphs
+                vertexColor = isColorGlyph ? new Color32(255, 255, 255, vertexColor.a) : vertexColor;
+
+                character.vertex_BL.color = vertexColor;
+                character.vertex_TL.color = vertexColor;
+                character.vertex_TR.color = vertexColor;
+                character.vertex_BR.color = vertexColor;
+            }
+            else
+            {
+                if (!m_overrideHtmlColors && m_colorStack.index > 1)
+                {
+                    character.vertex_BL.color = vertexColor;
+                    character.vertex_TL.color = vertexColor;
+                    character.vertex_TR.color = vertexColor;
+                    character.vertex_BR.color = vertexColor;
+                }
+                else // Handle Vertex Color Gradient
+                {
+                    // Use Vertex Color Gradient Preset (if one is assigned)
+                    if (!ReferenceEquals(m_fontColorGradientPreset,null))
+                    {
+                        character.vertex_BL.color = m_fontColorGradientPreset.bottomLeft * vertexColor;
+                        character.vertex_TL.color = m_fontColorGradientPreset.topLeft * vertexColor;
+                        character.vertex_TR.color = m_fontColorGradientPreset.topRight * vertexColor;
+                        character.vertex_BR.color = m_fontColorGradientPreset.bottomRight * vertexColor;
+                    }
+                    else
+                    {
+                        character.vertex_BL.color = m_fontColorGradient.bottomLeft * vertexColor;
+                        character.vertex_TL.color = m_fontColorGradient.topLeft * vertexColor;
+                        character.vertex_TR.color = m_fontColorGradient.topRight * vertexColor;
+                        character.vertex_BR.color = m_fontColorGradient.bottomRight * vertexColor;
+                    }
+                }
+            }
+
+            if (!ReferenceEquals(m_colorGradientPreset, null) && !isColorGlyph)
+            {
+                if (m_colorGradientPresetIsTinted)
+                {
+                    character.vertex_BL.color *= m_colorGradientPreset.bottomLeft;
+                    character.vertex_TL.color *= m_colorGradientPreset.topLeft;
+                    character.vertex_TR.color *= m_colorGradientPreset.topRight;
+                    character.vertex_BR.color *= m_colorGradientPreset.bottomRight;
+                }
+                else
+                {
+                    character.vertex_BL.color = m_colorGradientPreset.bottomLeft.MinAlpha(vertexColor);
+                    character.vertex_TL.color = m_colorGradientPreset.topLeft.MinAlpha(vertexColor);
+                    character.vertex_TR.color = m_colorGradientPreset.topRight.MinAlpha(vertexColor);
+                    character.vertex_BR.color = m_colorGradientPreset.bottomRight.MinAlpha(vertexColor);
+                }
+            }
+            #endregion
+
+            // Apply style_padding only if this is a SDF Shader.
+            if (!m_isSDFShader)
+                style_padding = 0f;
+
+
+            // Setup UVs for the Character
+            #region Setup UVs
+
+            Glyph altGlyph = character.alternativeGlyph;
+            GlyphRect glyphRect = altGlyph == null ? m_cached_TextElement.m_Glyph.glyphRect : altGlyph.glyphRect;
+
+            // Store UV Information
+            character.vertex_BL.uv.x = (glyphRect.x - padding - style_padding) / m_currentFontAsset.m_AtlasWidth;
+            character.vertex_BL.uv.y = (glyphRect.y - padding - style_padding) / m_currentFontAsset.m_AtlasHeight;
+            character.vertex_TL.uv.x = character.vertex_BL.uv.x;
+            character.vertex_TL.uv.y = (glyphRect.y + padding + style_padding + glyphRect.height) / m_currentFontAsset.m_AtlasHeight;
+            character.vertex_TR.uv.x = (glyphRect.x + padding + style_padding + glyphRect.width) / m_currentFontAsset.m_AtlasWidth;
+            character.vertex_TR.uv.y = character.vertex_TL.uv.y;
+            character.vertex_BR.uv.x = character.vertex_TR.uv.x;
+            character.vertex_BR.uv.y = character.vertex_BL.uv.y;
+            #endregion Setup UVs
+
+
+            // Normal
+            #region Setup Normals & Tangents
+            //Vector3 normal = new Vector3(0, 0, -1);
+            //m_textInfo.characterInfo[m_characterCount].vertex_BL.normal = normal;
+            //m_textInfo.characterInfo[m_characterCount].vertex_TL.normal = normal;
+            //m_textInfo.characterInfo[m_characterCount].vertex_TR.normal = normal;
+            //m_textInfo.characterInfo[m_characterCount].vertex_BR.normal = normal;
+
+            // Tangents
+            //Vector4 tangent = new Vector4(-1, 0, 0, 1);
+            //m_textInfo.characterInfo[m_characterCount].vertex_BL.tangent = tangent;
+            //m_textInfo.characterInfo[m_characterCount].vertex_TL.tangent = tangent;
+            //m_textInfo.characterInfo[m_characterCount].vertex_TR.tangent = tangent;
+            //m_textInfo.characterInfo[m_characterCount].vertex_BR.tangent = tangent;
+            #endregion end Normals & Tangents
+        }
+
+
+        private struct NormalCaseLineInfo
+        {
+            public int StartIndex;
+            public int Count;
+            public float TotalWidth;
+            public float MaxAscender;
+            public float MinDescender;
+            public float LineYOffset;
+            public Vector2 CalculatedAlignmentJustificationOffset;
+        }
+
+        private readonly List<NormalCaseLineInfo> normalCaseLineInfos = new();
+        private void DoNormalCaseGenerateTextMesh()
+        {
+            k_Matt1Marker.Begin();
+            normalCaseLineInfos.Clear();
+            m_characterCount = 0;
+            m_xAdvance = 0;
+            m_lineOffset = 0;
+            m_currentFontSize = m_fontSize;
+            m_fontScaleMultiplier = 1;
+            m_fontColor32 = m_fontColor;
+            m_htmlColor = m_fontColor32;
+            m_lineJustification = horizontalAlignment;
+            
+            float orthographicAdjustmentFactor = (m_isOrthographic ? 1 : 0.1f);
+            float boldSpacingAdjustment = 0;
+            float characterSpacingAdjustment = m_characterSpacing;
+            int totalCharacterCount = m_totalCharacterCount;
+            float adjustedScale = m_currentFontSize * (1.0f / m_currentFontAsset.m_FaceInfo.pointSize) * m_currentFontAsset.m_FaceInfo.scale * orthographicAdjustmentFactor;
+            float baselineOffset = m_currentFontAsset.m_FaceInfo.baseline * adjustedScale * m_fontScaleMultiplier * m_currentFontAsset.m_FaceInfo.scale;
+            float lineHeight = m_currentFontAsset.m_FaceInfo.lineHeight * adjustedScale;
+            float elementAscentLine = m_currentFontAsset.m_FaceInfo.ascentLine * adjustedScale;
+            float elementDescentLine = m_currentFontAsset.m_FaceInfo.descentLine * adjustedScale;
+            
+            NormalCaseLineInfo currentLine = new()
+            {
+                MaxAscender = elementAscentLine,
+                MinDescender = elementDescentLine
+            };
+            
+            for(int i = 0; i < m_TextProcessingArray.Length && m_TextProcessingArray[i].unicode != 0 && m_characterCount < totalCharacterCount; i++)
+            {
+                uint charCode = m_TextProcessingArray[i].unicode;
+                
+                ref TMP_CharacterInfo tmpCharacterInfo = ref m_textInfo.characterInfo[m_characterCount];
+                m_cached_TextElement = tmpCharacterInfo.textElement;
+
+                tmpCharacterInfo.elementType = TMP_TextElementType.Character;
+                tmpCharacterInfo.scale = adjustedScale * m_fontScaleMultiplier * m_cached_TextElement.m_Scale * m_cached_TextElement.m_Glyph.scale;
+                
+                GlyphMetrics currentGlyphMetrics = m_cached_TextElement.m_Glyph.metrics;
+
+                bool isWhiteSpace = charCode <= 0xFFFF && char.IsWhiteSpace((char)charCode);
+                
+                // line break
+                if(charCode == '\n')
+                {
+                    normalCaseLineInfos.Add(currentLine);
+                    currentLine = new()
+                    {
+                        Count = 0,
+                        TotalWidth = 0,
+                        StartIndex = i + 1,
+                        MaxAscender = elementAscentLine,
+                        MinDescender = elementDescentLine,
+                        LineYOffset = currentLine.LineYOffset + lineHeight
+                    };
+                    m_xAdvance = 0;
+                }
+
+                currentLine.MaxAscender = Mathf.Max(currentLine.MaxAscender, elementAscentLine);
+                currentLine.MinDescender = Mathf.Min(currentLine.MinDescender, elementDescentLine);
+
+                Vector3 topLeft;
+                topLeft.x = m_xAdvance + ((currentGlyphMetrics.horizontalBearingX) * adjustedScale * (1 - m_charWidthAdjDelta));
+                topLeft.y = baselineOffset + (currentGlyphMetrics.horizontalBearingY) * adjustedScale - m_lineOffset + m_baselineOffset;
+                topLeft.z = 0;
+
+                Vector3 bottomLeft;
+                bottomLeft.x = topLeft.x;
+                bottomLeft.y = topLeft.y - ((currentGlyphMetrics.height) * adjustedScale);
+                bottomLeft.z = 0;
+
+                Vector3 topRight;
+                topRight.x = bottomLeft.x + ((currentGlyphMetrics.width) * adjustedScale * (1 - m_charWidthAdjDelta));
+                topRight.y = topLeft.y;
+                topRight.z = 0;
+
+                Vector3 bottomRight;
+                bottomRight.x = topRight.x;
+                bottomRight.y = bottomLeft.y;
+                bottomRight.z = 0;
+
+                tmpCharacterInfo.bottomLeft = bottomLeft;
+                tmpCharacterInfo.topLeft = topLeft;
+                tmpCharacterInfo.topRight = topRight;
+                tmpCharacterInfo.bottomRight = bottomRight;
+                tmpCharacterInfo.origin = m_xAdvance;
+                tmpCharacterInfo.baseLine = (baselineOffset - m_lineOffset + m_baselineOffset);
+                tmpCharacterInfo.aspectRatio = (topRight.x - bottomLeft.x) / (topLeft.y - bottomLeft.y);
+                tmpCharacterInfo.isVisible = false;
+                tmpCharacterInfo.lineNumber = normalCaseLineInfos.Count;
+
+                m_xAdvance += ((currentGlyphMetrics.horizontalAdvance) * adjustedScale +
+                               (m_currentFontAsset.normalSpacingOffset + characterSpacingAdjustment + boldSpacingAdjustment) * adjustedScale + m_cSpacing) * (1 - m_charWidthAdjDelta);
+
+                if(isWhiteSpace || charCode == 0x200B)
+                {
+                    m_xAdvance += m_wordSpacing * (m_fontSize * 0.01f);
+                }
+
+                // Store xAdvance information
+                tmpCharacterInfo.xAdvance = m_xAdvance;
+
+                //TODO: check line info
+
+                if((isWhiteSpace == false && charCode != 0x200B && charCode != 0xAD && charCode != 0x03))
+                {
+                    tmpCharacterInfo.isVisible = true;
+                }
+
+                if(tmpCharacterInfo.isVisible)
+                {
+                    m_meshExtents.min.x = Mathf.Min(m_meshExtents.min.x, tmpCharacterInfo.bottomLeft.x);
+                    m_meshExtents.min.y = Mathf.Min(m_meshExtents.min.y, tmpCharacterInfo.bottomLeft.y);
+                    m_meshExtents.max.x = Mathf.Max(m_meshExtents.max.x, tmpCharacterInfo.topRight.x);
+                    m_meshExtents.max.y = Mathf.Max(m_meshExtents.max.y, tmpCharacterInfo.topRight.y);
+                }
+
+                Color32 vertexColor;
+                if(m_overrideHtmlColors)
+                    vertexColor = m_fontColor32;
+                else
+                    vertexColor = m_htmlColor;
+
+                SaveGlyphVertexInfo2(ref tmpCharacterInfo, 0, 0, vertexColor);
+
+                m_lineVisibleCharacterCount += 1;
+                m_lastVisibleCharacterOfLine = m_characterCount;
+
+                currentLine.Count++;
+                currentLine.TotalWidth = m_xAdvance;
+                m_characterCount++;
+            }
+            
+            // Finalise this line
+            normalCaseLineInfos.Add(currentLine);
+            
+            k_Matt1Marker.End();
+            
+            k_Matt2Marker.Begin();
+            if (m_characterCount == 0)
+            {
+                ClearMesh(true);
+                // Event indicating the text has been regenerated.
+                TMPro_EventManager.ON_TEXT_CHANGED(this);
+                return;
+            }
+            
+            m_textInfo.meshInfo[0].Clear(false);
+            
+            // The default positions of character lines places the first character in each line in the middle of the `m_rectTransform.rect`
+            // The origin position of characters is the bottom left corner at ascent y=0
+            
+            Rect rect = m_rectTransform.rect;
+            switch(m_lineJustification)
+            {
+                case HorizontalAlignmentOptions.Left:
+                    for(var i = 0; i < normalCaseLineInfos.Count; i++)
+                    {
+                        NormalCaseLineInfo normalCaseLineInfo = normalCaseLineInfos[i];
+                        normalCaseLineInfo.CalculatedAlignmentJustificationOffset.x = rect.xMin;
+                        normalCaseLineInfos[i] = normalCaseLineInfo;
+                    }
+                    break;
+                case HorizontalAlignmentOptions.Center:
+                    // Center alignment depends on the total length of each line to center based on content and the size of the text rect
+                    for(var i = 0; i < normalCaseLineInfos.Count; i++)
+                    {
+                        NormalCaseLineInfo normalCaseLineInfo = normalCaseLineInfos[i];
+                        normalCaseLineInfo.CalculatedAlignmentJustificationOffset.x = -normalCaseLineInfo.TotalWidth * 0.5f;
+                        normalCaseLineInfos[i] = normalCaseLineInfo;
+                    }
+                    break;
+                case HorizontalAlignmentOptions.Right:
+                    // Right alignment depends on the total length of each line, and may require negative offset if the line overflows
+                    for(var i = 0; i < normalCaseLineInfos.Count; i++)
+                    {
+                        NormalCaseLineInfo normalCaseLineInfo = normalCaseLineInfos[i];
+                        normalCaseLineInfo.CalculatedAlignmentJustificationOffset.x = rect.xMax - normalCaseLineInfo.TotalWidth;
+                        normalCaseLineInfos[i] = normalCaseLineInfo;
+                    }
+                    break;
+                case HorizontalAlignmentOptions.Justified:
+                case HorizontalAlignmentOptions.Flush:
+                case HorizontalAlignmentOptions.Geometry:
+                default:
+                    // ¯\_(ツ)_/¯
+                    break;
+            }
+
+            // We always have one line
+            float totalFirstLine = normalCaseLineInfos[0].MaxAscender;
+            
+            switch(m_VerticalAlignment)
+            {
+                case VerticalAlignmentOptions.Top:
+                    // Shift down from first line BL, then shift up based on rect height
+                    for(var i = 0; i < normalCaseLineInfos.Count; i++)
+                    {
+                        NormalCaseLineInfo normalCaseLineInfo = normalCaseLineInfos[i];
+                        normalCaseLineInfo.CalculatedAlignmentJustificationOffset.y = (totalFirstLine - rect.yMax);
+                        normalCaseLineInfos[i] = normalCaseLineInfo;
+                    }
+                    break;
+                case VerticalAlignmentOptions.Middle:
+                    // We always have one line, even if we have zero characters
+                    // The first line initial position is at BL...
+                    float totalHeightOfAllLines = ((normalCaseLineInfos.Count * -lineHeight) * 0.5f) + totalFirstLine;
+                    for(var i = 0; i < normalCaseLineInfos.Count; i++)
+                    {
+                        NormalCaseLineInfo normalCaseLineInfo = normalCaseLineInfos[i];
+                        normalCaseLineInfo.CalculatedAlignmentJustificationOffset.y = (totalHeightOfAllLines);
+                        normalCaseLineInfos[i] = normalCaseLineInfo;
+                    }
+
+                    break;
+                case VerticalAlignmentOptions.Bottom:
+                    // Shift down from last line BL
+
+                    NormalCaseLineInfo lastLineInfo = normalCaseLineInfos[normalCaseLineInfos.Count - 1];
+                    
+                    for(var i = 0; i < normalCaseLineInfos.Count; i++)
+                    {
+                        NormalCaseLineInfo normalCaseLineInfo = normalCaseLineInfos[i];
+                        normalCaseLineInfo.CalculatedAlignmentJustificationOffset.y = -rect.yMin - lastLineInfo.LineYOffset + lastLineInfo.MinDescender;
+                        normalCaseLineInfos[i] = normalCaseLineInfo;
+                    }
+                    break;
+                case VerticalAlignmentOptions.Baseline:
+                case VerticalAlignmentOptions.Capline:
+                case VerticalAlignmentOptions.Geometry:
+                    default:
+                    // ¯\_(ツ)_/¯
+                    break;
+            }
+
+            // UV Mapping
+            TMP_CharacterInfo[] characterInfos = m_textInfo.characterInfo;
+            float lossyScale = m_previousLossyScaleY = this.transform.lossyScale.y;
+            
+            for(int i = 0; i < m_characterCount; i++)
+            {
+                bool isCharacterVisible = characterInfos[i].isVisible;
+                characterInfos[i].vertex_BL.uv2.x = 0; //+ m_uvOffset.x;
+                characterInfos[i].vertex_TL.uv2.x = 0; //+ m_uvOffset.x;
+                characterInfos[i].vertex_TR.uv2.x = 1; //+ m_uvOffset.x;
+                characterInfos[i].vertex_BR.uv2.x = 1; //+ m_uvOffset.x;
+                characterInfos[i].vertex_BL.uv2.y = 0; // + m_uvOffset.y;
+                characterInfos[i].vertex_TL.uv2.y = 1; // + m_uvOffset.y;
+                characterInfos[i].vertex_TR.uv2.y = 1; // + m_uvOffset.y;
+                characterInfos[i].vertex_BR.uv2.y = 0; // + m_uvOffset.y;
+                
+                float xScale = characterInfos[i].scale * Mathf.Abs(lossyScale) * (1 - m_charWidthAdjDelta);
+                
+                // Set SDF Scale
+                characterInfos[i].vertex_BL.uv.w = xScale;
+                characterInfos[i].vertex_TL.uv.w = xScale;
+                characterInfos[i].vertex_TR.uv.w = xScale;
+                characterInfos[i].vertex_BR.uv.w = xScale;
+
+                if(isCharacterVisible)
+                {
+                    NormalCaseLineInfo lineInfo = normalCaseLineInfos[characterInfos[i].lineNumber];
+                    Vector3 offset = new(lineInfo.CalculatedAlignmentJustificationOffset.x, -(lineInfo.LineYOffset + lineInfo.CalculatedAlignmentJustificationOffset.y), 0);
+                    
+                    characterInfos[i].vertex_BL.position += offset;
+                    characterInfos[i].vertex_TL.position += offset;
+                    characterInfos[i].vertex_TR.position += offset;
+                    characterInfos[i].vertex_BR.position += offset;
+                    FillCharacterVertexBuffers2(ref characterInfos[i], ref m_textInfo.meshInfo[characterInfos[i].materialReferenceIndex]);
+                }
+            }
+            
+            k_Matt2Marker.End();
+
+            k_Matt3Marker.Begin();
+            if(m_renderMode == TextRenderFlags.Render && IsActive())
+            {
+                OnPreRenderText?.Invoke(m_textInfo);
+
+                if(m_geometrySortingOrder != VertexSortingOrder.Normal)
+                {
+                    m_textInfo.meshInfo[0].SortGeometry(VertexSortingOrder.Reverse);
+                }
+                
+                m_mesh.MarkDynamic();
+                m_mesh.vertices = m_textInfo.meshInfo[0].vertices;
+                m_mesh.SetUVs(0, m_textInfo.meshInfo[0].uvs0);
+                m_mesh.uv2 = m_textInfo.meshInfo[0].uvs2;
+                m_mesh.colors32 = m_textInfo.meshInfo[0].colors32;
+
+                m_mesh.RecalculateBounds();
+                
+                for (int i = 1; i < m_textInfo.materialCount; i++)
+                {
+                    m_textInfo.meshInfo[i].ClearUnusedVertices();
+
+                    if(m_subTextObjects[i] == null)
+                    {
+                        continue;
+                    }
+
+                    if(m_geometrySortingOrder != VertexSortingOrder.Normal)
+                    {
+                        m_textInfo.meshInfo[i].SortGeometry(VertexSortingOrder.Reverse);
+                    }
+
+                    m_subTextObjects[i].mesh.vertices = m_textInfo.meshInfo[i].vertices;
+                    m_subTextObjects[i].mesh.SetUVs(0, m_textInfo.meshInfo[i].uvs0);
+                    m_subTextObjects[i].mesh.uv2 = m_textInfo.meshInfo[i].uvs2;
+                    m_subTextObjects[i].mesh.colors32 = m_textInfo.meshInfo[i].colors32;
+                    m_subTextObjects[i].mesh.RecalculateBounds();
+                }
+            }
+                
+            TMPro_EventManager.ON_TEXT_CHANGED(this);
+            m_IsAutoSizePointSizeSet = true;
+            k_Matt3Marker.End();
+        }
 
         /// <summary>
         /// This is the main function that is responsible for creating / displaying the text.
@@ -2118,6 +2573,16 @@ namespace TMPro
                 TMPro_EventManager.ON_TEXT_CHANGED(this);
                 m_IsAutoSizePointSizeSet = true;
                 k_GenerateTextMarker.End();
+                return;
+            }
+
+            bool isNormalCase = m_overflowMode == TextOverflowModes.Overflow && m_ActiveFontFeatures.Contains(OTL_FeatureTag.kern) && !m_isOrthographic && !m_isRichText;
+
+            if(isNormalCase)
+            {
+                k_TempMarker.Begin();
+                DoNormalCaseGenerateTextMesh();
+                k_TempMarker.End();
                 return;
             }
 
