@@ -9,8 +9,11 @@ namespace TMPro.EditorUtilities
 {
     public abstract class TMP_BaseEditorPanel : Editor
     {
+        public static bool TMP_HasMattishOptimizationsEnabled = false;
+        
         //Labels and Tooltips
         static readonly GUIContent k_RtlToggleLabel = new GUIContent("Enable RTL Editor", "Reverses text direction and allows right to left editing.");
+        static readonly GUIContent k_MattishOptimizationToggleLabel = new GUIContent("Enable Mattish Optimizations", "Enable optimizations which perform faster layouts, but has reduced feature set.");
         //static readonly GUIContent k_MainSettingsLabel = new GUIContent("Main Settings");
         static readonly GUIContent k_FontAssetLabel = new GUIContent("Font Asset", "The Font Asset containing the glyphs that can be rendered for this text.");
         static readonly GUIContent k_MaterialPresetLabel = new GUIContent("Material Preset", "The material used for rendering. Only materials created from the Font Asset can be used.");
@@ -109,6 +112,8 @@ namespace TMPro.EditorUtilities
         protected List<TMP_Style> m_Styles = new List<TMP_Style>();
         protected GUIContent[] m_StyleNames;
         protected int m_StyleSelectionIndex;
+        
+        protected SerializedProperty m_IsMattishOptimization;
 
         protected SerializedProperty m_FontStyleProp;
 
@@ -188,6 +193,8 @@ namespace TMPro.EditorUtilities
 
         protected virtual void OnEnable()
         {
+            m_IsMattishOptimization = serializedObject.FindProperty("m_isMattishOptimization");
+            
             m_TextProp = serializedObject.FindProperty("m_text");
             m_IsRightToLeftProp = serializedObject.FindProperty("m_isRightToLeft");
             m_FontAssetProp = serializedObject.FindProperty("m_fontAsset");
@@ -328,12 +335,25 @@ namespace TMPro.EditorUtilities
 
             serializedObject.Update();
 
-            DrawTextInput();
-
-            DrawMainSettings();
-
-            DrawExtraSettings();
-
+            if(m_IsMattishOptimization.boolValue)
+            {
+                TMP_HasMattishOptimizationsEnabled = true;
+                m_IsMattishOptimization.boolValue = EditorGUILayout.Toggle(k_MattishOptimizationToggleLabel, m_IsMattishOptimization.boolValue);
+                
+                DrawTextInputMattish();
+                DrawMainSettingsMattish();
+                DrawExtraSettingsMattish();
+                
+                TMP_HasMattishOptimizationsEnabled = false;
+            }
+            else
+            {
+                m_IsMattishOptimization.boolValue = EditorGUILayout.Toggle(k_MattishOptimizationToggleLabel, m_IsMattishOptimization.boolValue);
+                
+                DrawTextInput();
+                DrawMainSettings();
+                DrawExtraSettings();
+            }
             EditorGUILayout.Space();
 
             if (serializedObject.ApplyModifiedProperties() || m_HavePropertiesChanged)
@@ -444,6 +464,41 @@ namespace TMPro.EditorUtilities
             }
         }
 
+        private void DrawTextInputMattish(){
+            EditorGUILayout.Space();
+
+            Rect rect = EditorGUILayout.GetControlRect(false, 22);
+            GUI.Label(rect, new GUIContent("<b>Text Input</b>"), TMP_UIStyleManager.sectionHeader);
+
+            EditorGUI.indentLevel = 0;
+
+            // Display RTL Toggle
+            float labelWidth = EditorGUIUtility.labelWidth;
+
+            EditorGUIUtility.labelWidth = labelWidth;
+
+            EditorGUI.BeginChangeCheck();
+            EditorGUILayout.PropertyField(m_TextProp, GUIContent.none);
+
+            // Need to also compare string content due to issue related to scroll bar drag handle
+            if (EditorGUI.EndChangeCheck() && m_TextProp.stringValue != m_TextComponent.text)
+            {
+                m_TextComponent.m_inputSource = TMP_Text.TextInputSources.TextInputBox;
+                m_HavePropertiesChanged = true;
+            }
+        }
+
+        private void DrawMainSettingsMattish()
+        {
+            GUILayout.Label(new GUIContent("<b>Main Settings</b>"), TMP_UIStyleManager.sectionHeader);
+            
+            DrawFontMattish();
+            
+            DrawColorMattish();
+
+            DrawAlignmentMattish();
+        }
+        
         protected void DrawTextInput()
         {
             EditorGUILayout.Space();
@@ -549,6 +604,75 @@ namespace TMPro.EditorUtilities
             DrawTextureMapping();
 
             //EditorGUI.indentLevel -= 1;
+        }
+        
+        private void DrawFontMattish()
+        {
+            bool isFontAssetDirty = false;
+
+            // FONT ASSET
+            EditorGUI.BeginChangeCheck();
+            EditorGUILayout.PropertyField(m_FontAssetProp, k_FontAssetLabel);
+            if (EditorGUI.EndChangeCheck())
+            {
+                m_HavePropertiesChanged = true;
+                m_HasFontAssetChangedProp.boolValue = true;
+
+                // Get new Material Presets for the new font asset
+                m_MaterialPresetNames = GetMaterialPresets();
+                m_MaterialPresetSelectionIndex = 0;
+
+                isFontAssetDirty = true;
+            }
+
+            Rect rect;
+
+            // MATERIAL PRESET
+            if (m_MaterialPresetNames != null && !isFontAssetDirty )
+            {
+                EditorGUI.BeginChangeCheck();
+                rect = EditorGUILayout.GetControlRect(false, 17);
+
+                EditorGUI.BeginProperty(rect, k_MaterialPresetLabel, m_FontSharedMaterialProp);
+
+                float oldHeight = EditorStyles.popup.fixedHeight;
+                EditorStyles.popup.fixedHeight = rect.height;
+
+                int oldSize = EditorStyles.popup.fontSize;
+                EditorStyles.popup.fontSize = 11;
+
+                if (m_FontSharedMaterialProp.objectReferenceValue != null)
+                    m_MaterialPresetIndexLookup.TryGetValue(m_FontSharedMaterialProp.objectReferenceValue.GetInstanceID(), out m_MaterialPresetSelectionIndex);
+
+                m_MaterialPresetSelectionIndex = EditorGUI.Popup(rect, k_MaterialPresetLabel, m_MaterialPresetSelectionIndex, m_MaterialPresetNames);
+
+                EditorGUI.EndProperty();
+
+                if (EditorGUI.EndChangeCheck())
+                {
+                    m_FontSharedMaterialProp.objectReferenceValue = m_MaterialPresets[m_MaterialPresetSelectionIndex];
+                    m_HavePropertiesChanged = true;
+                }
+
+                EditorStyles.popup.fixedHeight = oldHeight;
+                EditorStyles.popup.fontSize = oldSize;
+            }
+
+            // FONT SIZE
+            EditorGUI.BeginChangeCheck();
+
+            EditorGUILayout.PropertyField(m_FontSizeProp, k_FontSizeLabel, GUILayout.MaxWidth(EditorGUIUtility.labelWidth + 50f));
+
+            if (EditorGUI.EndChangeCheck())
+            {
+                float fontSize = Mathf.Clamp(m_FontSizeProp.floatValue, 0, 32767);
+
+                m_FontSizeProp.floatValue = fontSize;
+                m_FontSizeBaseProp.floatValue = fontSize;
+                m_HavePropertiesChanged = true;
+            }
+
+            EditorGUILayout.Space();
         }
 
         void DrawFont()
@@ -826,6 +950,138 @@ namespace TMPro.EditorUtilities
             EditorGUILayout.Space();
         }
 
+        void DrawColorMattish()
+        {
+            // FACE VERTEX COLOR
+            EditorGUI.BeginChangeCheck();
+            EditorGUILayout.PropertyField(m_FontColorProp, k_BaseColorLabel);
+            if (EditorGUI.EndChangeCheck())
+            {
+                m_HavePropertiesChanged = true;
+            }
+
+            EditorGUI.BeginChangeCheck();
+            EditorGUILayout.PropertyField(m_EnableVertexGradientProp, k_ColorGradientLabel);
+            if (EditorGUI.EndChangeCheck())
+            {
+                m_HavePropertiesChanged = true;
+            }
+
+            EditorGUIUtility.fieldWidth = 0;
+
+            if (m_EnableVertexGradientProp.boolValue)
+            {
+                EditorGUI.indentLevel += 1;
+
+                EditorGUI.BeginChangeCheck();
+
+                EditorGUILayout.PropertyField(m_FontColorGradientPresetProp, k_ColorPresetLabel);
+
+                SerializedObject obj = null;
+
+                SerializedProperty colorMode;
+
+                SerializedProperty topLeft;
+                SerializedProperty topRight;
+                SerializedProperty bottomLeft;
+                SerializedProperty bottomRight;
+
+                if (m_FontColorGradientPresetProp.objectReferenceValue == null)
+                {
+                    colorMode = m_ColorModeProp;
+                    topLeft = m_FontColorGradientProp.FindPropertyRelative("topLeft");
+                    topRight = m_FontColorGradientProp.FindPropertyRelative("topRight");
+                    bottomLeft = m_FontColorGradientProp.FindPropertyRelative("bottomLeft");
+                    bottomRight = m_FontColorGradientProp.FindPropertyRelative("bottomRight");
+                }
+                else
+                {
+                    obj = new SerializedObject(m_FontColorGradientPresetProp.objectReferenceValue);
+                    colorMode = obj.FindProperty("colorMode");
+                    topLeft = obj.FindProperty("topLeft");
+                    topRight = obj.FindProperty("topRight");
+                    bottomLeft = obj.FindProperty("bottomLeft");
+                    bottomRight = obj.FindProperty("bottomRight");
+                }
+
+                EditorGUILayout.PropertyField(colorMode, k_ColorModeLabel);
+
+                Rect rect = EditorGUILayout.GetControlRect(true, EditorGUIUtility.singleLineHeight * (EditorGUIUtility.wideMode ? 1 : 2));
+
+                EditorGUI.PrefixLabel(rect, k_CorenerColorsLabel);
+
+                rect.x += EditorGUIUtility.labelWidth;
+                rect.width = rect.width - EditorGUIUtility.labelWidth;
+
+                switch ((ColorMode)colorMode.enumValueIndex)
+                {
+                    case ColorMode.Single:
+                        TMP_EditorUtility.DrawColorProperty(rect, topLeft);
+
+                        topRight.colorValue = topLeft.colorValue;
+                        bottomLeft.colorValue = topLeft.colorValue;
+                        bottomRight.colorValue = topLeft.colorValue;
+                        break;
+                    case ColorMode.HorizontalGradient:
+                        rect.width /= 2f;
+
+                        TMP_EditorUtility.DrawColorProperty(rect, topLeft);
+
+                        rect.x += rect.width;
+
+                        TMP_EditorUtility.DrawColorProperty(rect, topRight);
+
+                        bottomLeft.colorValue = topLeft.colorValue;
+                        bottomRight.colorValue = topRight.colorValue;
+                        break;
+                    case ColorMode.VerticalGradient:
+                        TMP_EditorUtility.DrawColorProperty(rect, topLeft);
+
+                        rect = EditorGUILayout.GetControlRect(false, EditorGUIUtility.singleLineHeight * (EditorGUIUtility.wideMode ? 1 : 2));
+                        rect.x += EditorGUIUtility.labelWidth;
+
+                        TMP_EditorUtility.DrawColorProperty(rect, bottomLeft);
+
+                        topRight.colorValue = topLeft.colorValue;
+                        bottomRight.colorValue = bottomLeft.colorValue;
+                        break;
+                    case ColorMode.FourCornersGradient:
+                        rect.width /= 2f;
+
+                        TMP_EditorUtility.DrawColorProperty(rect, topLeft);
+
+                        rect.x += rect.width;
+
+                        TMP_EditorUtility.DrawColorProperty(rect, topRight);
+
+                        rect = EditorGUILayout.GetControlRect(false, EditorGUIUtility.singleLineHeight * (EditorGUIUtility.wideMode ? 1 : 2));
+                        rect.x += EditorGUIUtility.labelWidth;
+                        rect.width = (rect.width - EditorGUIUtility.labelWidth) / 2f;
+
+                        TMP_EditorUtility.DrawColorProperty(rect, bottomLeft);
+
+                        rect.x += rect.width;
+
+                        TMP_EditorUtility.DrawColorProperty(rect, bottomRight);
+                        break;
+                }
+
+                if (EditorGUI.EndChangeCheck())
+                {
+                    m_HavePropertiesChanged = true;
+                    if (obj != null)
+                    {
+                        obj.ApplyModifiedProperties();
+                        TMPro_EventManager.ON_COLOR_GRADIENT_PROPERTY_CHANGED(m_FontColorGradientPresetProp.objectReferenceValue as TMP_ColorGradient);
+                    }
+                }
+
+                EditorGUI.indentLevel -= 1;
+            }
+
+            EditorGUILayout.Space();
+        }
+
         void DrawColor()
         {
             // FACE VERTEX COLOR
@@ -1003,6 +1259,30 @@ namespace TMPro.EditorUtilities
             EditorGUILayout.Space();
         }
 
+        void DrawAlignmentMattish()
+        {
+            // TEXT ALIGNMENT
+            EditorGUI.BeginChangeCheck();
+
+            Rect rect = EditorGUILayout.GetControlRect(true, EditorGUIUtility.currentViewWidth > 504 ? 20 : 40 + 3);
+            EditorGUI.BeginProperty(rect, k_AlignmentLabel, m_HorizontalAlignmentProp);
+            EditorGUI.BeginProperty(rect, k_AlignmentLabel, m_VerticalAlignmentProp);
+
+            EditorGUI.PrefixLabel(rect, k_AlignmentLabel);
+            rect.x += EditorGUIUtility.labelWidth;
+
+            EditorGUI.PropertyField(rect, m_HorizontalAlignmentProp, GUIContent.none);
+            EditorGUI.PropertyField(rect, m_VerticalAlignmentProp, GUIContent.none);
+
+            if (EditorGUI.EndChangeCheck())
+                m_HavePropertiesChanged = true;
+
+            EditorGUI.EndProperty();
+            EditorGUI.EndProperty();
+
+            EditorGUILayout.Space();
+        }
+        
         void DrawAlignment()
         {
             // TEXT ALIGNMENT
@@ -1121,6 +1401,8 @@ namespace TMPro.EditorUtilities
 
             EditorGUILayout.Space();
         }
+
+        protected abstract void DrawExtraSettingsMattish();
 
         protected abstract void DrawExtraSettings();
 

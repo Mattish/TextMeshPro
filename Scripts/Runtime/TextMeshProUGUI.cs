@@ -808,6 +808,8 @@ namespace TMPro
             if (m_mesh == null)
             {
                 m_mesh = new Mesh();
+                m_mesh.MarkDynamic();
+                m_mesh.SetVertexBufferParams(0, TMP_MeshInfo.DefaultMeshDescriptors);
                 m_mesh.hideFlags = HideFlags.HideAndDontSave;
                 #if DEVELOPMENT_BUILD || UNITY_EDITOR
                 m_mesh.name = "TextMeshPro UI Mesh";
@@ -2138,7 +2140,7 @@ namespace TMPro
 
             // Save material and sprite count.
             m_textInfo.spriteCount = spriteCount;
-            int materialCount = m_textInfo.materialCount = m_materialReferenceIndexLookup.Count;
+            int materialCount = m_textInfo.materialCount = (int)m_materialReferenceIndexLookup.Length();
 
             // Check if we need to resize the MeshInfo array for handling different materials.
             if (materialCount > m_textInfo.meshInfo.Length)
@@ -2553,7 +2555,7 @@ namespace TMPro
 
             m_FXScale = Vector3.one;
             m_FXRotation = Quaternion.identity;
-
+            m_HasFXRotationSet = false;
             m_lineOffset = 0; // Amount of space between lines (font line spacing + m_linespacing).
             m_lineHeight = TMP_Math.FLOAT_UNSET;
             float lineGap = m_currentFontAsset.m_FaceInfo.lineHeight - (m_currentFontAsset.m_FaceInfo.ascentLine - m_currentFontAsset.m_FaceInfo.descentLine);
@@ -2708,7 +2710,9 @@ namespace TMPro
                     switch (charCode)
                     {
                         case 0x03:
-                            m_textInfo.characterInfo[m_characterCount].textElement = m_currentFontAsset.characterLookupTable[0x03];
+                            ref TMP_Character cha = ref m_currentFontAsset.characterLookupTable.TryGet(0x03, out bool foundCharacter);
+                            
+                            m_textInfo.characterInfo[m_characterCount].textElement = foundCharacter ? cha : null;
                             m_isTextTruncated = true;
                             break;
                         case 0x2D:

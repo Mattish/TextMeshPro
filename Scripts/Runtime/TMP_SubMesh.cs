@@ -178,6 +178,8 @@ namespace TMPro
                 if (m_mesh == null)
                 {
                     m_mesh = new Mesh();
+                    m_mesh.MarkDynamic();
+                    m_mesh.SetVertexBufferParams(0, TMP_MeshInfo.DefaultMeshDescriptors);
                     m_mesh.hideFlags = HideFlags.HideAndDontSave;
                 }
 

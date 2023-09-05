@@ -1,5 +1,6 @@
 ﻿using UnityEngine;
 using UnityEditor;
+using UnityEngine.UIElements;
 
 namespace TMPro.EditorUtilities
 {
@@ -135,7 +136,6 @@ namespace TMPro.EditorUtilities
         public override void OnGUI(Rect position, SerializedProperty property, GUIContent label)
         {
             var id = GUIUtility.GetControlID(k_TextAlignmentHash, FocusType.Keyboard, position);
-
             EditorGUI.BeginProperty(position, label, property);
             {
                 var controlArea = EditorGUI.PrefixLabel(position, id, label);
@@ -178,7 +178,7 @@ namespace TMPro.EditorUtilities
 
             position.width = k_AlignmentButtonWidth;
 
-            for (var i = 0; i < values.Length; i++)
+            for (var i = 0; i < (TMP_BaseEditorPanel.TMP_HasMattishOptimizationsEnabled ? 3 : values.Length); i++)
             {
                 var oldValue = values[i];
                 var newValue = TMP_EditorUtility.EditorToggle(position, oldValue, TMP_UIStyleManager.alignContentA[i], i == 0 ? TMP_UIStyleManager.alignmentButtonLeft : (i == 5 ? TMP_UIStyleManager.alignmentButtonRight : TMP_UIStyleManager.alignmentButtonMid));
@@ -256,7 +256,7 @@ namespace TMPro.EditorUtilities
 
             position.width = k_AlignmentButtonWidth;
 
-            for (var i = 0; i < values.Length; i++)
+            for (var i = 0; i < (TMP_BaseEditorPanel.TMP_HasMattishOptimizationsEnabled ? 3 : values.Length); i++)
             {
                 var oldValue = values[i];
                 var newValue = TMP_EditorUtility.EditorToggle(position, oldValue, TMP_UIStyleManager.alignContentB[i], i == 0 ? TMP_UIStyleManager.alignmentButtonLeft : (i == 5 ? TMP_UIStyleManager.alignmentButtonRight : TMP_UIStyleManager.alignmentButtonMid));

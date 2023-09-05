@@ -409,13 +409,10 @@ namespace TMPro
 
             if (font == null) return null;
 
-            if (font.characterLookupTable.TryGetValue(unicode, out character))
+            ref TMP_Character tmpCharacter = ref font.characterLookupTable.TryGet(unicode, out bool gotCharacter);
+            if (gotCharacter)
             {
-                if (character.textAsset != null)
-                    return font;
-
-                // Remove character from lookup table
-                font.characterLookupTable.Remove(unicode);
+                return font;
             }
 
             if (font.fallbackFontAssetTable != null && font.fallbackFontAssetTable.Count > 0)

@@ -3,6 +3,7 @@
 using System;
 using System.Text;
 using System.Collections.Generic;
+using Collections;
 using Unity.Profiling;
 using UnityEngine;
 using UnityEngine.Serialization;
@@ -193,7 +194,7 @@ namespace TMPro
         protected Material m_sharedMaterial;
         protected Material m_currentMaterial;
         protected static MaterialReference[] m_materialReferences = new MaterialReference[4];
-        protected static Dictionary<int, int> m_materialReferenceIndexLookup = new Dictionary<int, int>();
+        protected static SpeedictPointerLess<int> m_materialReferenceIndexLookup = new SpeedictPointerLess<int>(8);
 
         protected static TMP_TextProcessingStack<MaterialReference> m_materialReferenceStack = new TMP_TextProcessingStack<MaterialReference>(new MaterialReference[16]);
         protected int m_currentMaterialIndex;
@@ -932,6 +933,17 @@ namespace TMPro
         }
         [SerializeField]
         protected bool m_isRichText = true; // Used to enable or disable Rich Text.
+        
+        /// <summary>
+        /// Enables or Disables Mattish Optimizations
+        /// </summary>
+        public bool isMattishOptimization
+        {
+            get { return m_isMattishOptimization; }
+            set { if (m_isMattishOptimization == value) return; m_isMattishOptimization = value; m_havePropertiesChanged = true; SetVerticesDirty(); SetLayoutDirty(); }
+        }
+        [SerializeField]
+        protected bool m_isMattishOptimization = true; // Used to enable or disable Mattish Optimizations.
 
         /// <summary>
         /// Determines if text assets defined in the Emoji Fallback Text Assets list in the TMP Settings will be search first for characters defined as Emojis in the Unicode 14.0 standards.
@@ -1549,6 +1561,7 @@ namespace TMPro
         protected bool m_isTextLayoutPhase;
         //protected Vector3 m_FXTranslation;
         protected Quaternion m_FXRotation;
+        protected bool m_HasFXRotationSet;
         protected Vector3 m_FXScale;
 
         /// <summary>
@@ -1586,7 +1599,7 @@ namespace TMPro
             }
         }
 
-        private TMP_CharacterInfo[] m_internalCharacterInfo; // Used by functions to calculate preferred values.
+        protected TMP_CharacterInfo[] m_internalCharacterInfo; // Used by functions to calculate preferred values.
         protected int m_totalCharacterCount;
 
         // Structures used to save the state of the text layout in conjunction with line breaking / word wrapping.
@@ -2014,11 +2027,11 @@ namespace TMPro
         /// Convert source text to Unicode (uint) and populate internal text backing array.
         /// </summary>
         /// <param name="sourceText">Source text to be converted</param>
-        void PopulateTextBackingArray(string sourceText)
+        bool PopulateTextBackingArray(string sourceText)
         {
             int srcLength = sourceText == null ? 0 : sourceText.Length;
 
-            PopulateTextBackingArray(sourceText, 0, srcLength);
+            return PopulateTextBackingArray(sourceText, 0, srcLength);
         }
 
         /// <summary>
@@ -2027,8 +2040,10 @@ namespace TMPro
         /// <param name="sourceText">string containing the source text to be converted</param>
         /// <param name="start">Index of the first element of the source array to be converted and copied to the internal text backing array.</param>
         /// <param name="length">Number of elements in the array to be converted and copied to the internal text backing array.</param>
-        void PopulateTextBackingArray(string sourceText, int start, int length)
+        bool PopulateTextBackingArray(string sourceText, int start, int length)
         {
+            bool requiresResizeOrDifferent = false;
+
             int readIndex;
             int writeIndex = 0;
 
@@ -2045,19 +2060,26 @@ namespace TMPro
             }
 
             // Make sure array size is appropriate
-            if (length >= m_TextBackingArray.Capacity)
+            if(length >= m_TextBackingArray.Capacity)
+            {
                 m_TextBackingArray.Resize((length));
+                requiresResizeOrDifferent = true;
+            }
 
             int end = readIndex + length;
             for (; readIndex < end; readIndex++)
             {
+                requiresResizeOrDifferent |= m_TextBackingArray[writeIndex] != sourceText[readIndex];
                 m_TextBackingArray[writeIndex] = sourceText[readIndex];
                 writeIndex += 1;
             }
 
             // Terminate array with zero as we are not clearing the array on new invocation of this function.
+            requiresResizeOrDifferent |= m_TextBackingArray[writeIndex] != 0;
+            requiresResizeOrDifferent |= m_TextBackingArray.Count != writeIndex;
             m_TextBackingArray[writeIndex] = 0;
             m_TextBackingArray.Count = writeIndex;
+            return requiresResizeOrDifferent;
         }
 
         /// <summary>
@@ -2105,8 +2127,10 @@ namespace TMPro
         /// <param name="sourceText">char array containing the source text to be converted</param>
         /// <param name="start">Index of the first element of the source array to be converted and copied to the internal text backing array.</param>
         /// <param name="length">Number of elements in the array to be converted and copied to the internal text backing array.</param>
-        void PopulateTextBackingArray(char[] sourceText, int start, int length)
+        bool PopulateTextBackingArray(char[] sourceText, int start, int length)
         {
+            bool requiresResizeOrDifferent = false;
+            
             int readIndex;
             int writeIndex = 0;
 
@@ -2123,19 +2147,26 @@ namespace TMPro
             }
 
             // Make sure array size is appropriate
-            if (length >= m_TextBackingArray.Capacity)
+            if(length >= m_TextBackingArray.Capacity)
+            {
                 m_TextBackingArray.Resize((length));
+                requiresResizeOrDifferent = true;
+            }
 
             int end = readIndex + length;
             for (; readIndex < end; readIndex++)
             {
+                requiresResizeOrDifferent |= m_TextBackingArray[writeIndex] != sourceText[readIndex];
                 m_TextBackingArray[writeIndex] = sourceText[readIndex];
                 writeIndex += 1;
             }
 
             // Terminate array with zero as we are not clearing the array on new invocation of this function.
+            requiresResizeOrDifferent |= m_TextBackingArray[writeIndex] != 0;
+            requiresResizeOrDifferent |= m_TextBackingArray.Count != writeIndex;
             m_TextBackingArray[writeIndex] = 0;
             m_TextBackingArray.Count = writeIndex;
+            return requiresResizeOrDifferent;
         }
 
         /// <summary>
@@ -2397,7 +2428,7 @@ namespace TMPro
         {
             int srcLength = sourceText == null ? 0 : sourceText.Length;
 
-            PopulateTextBackingArray(sourceText, 0, srcLength);
+            bool didChange = PopulateTextBackingArray(sourceText, 0, srcLength);
 
             m_text = sourceText;
 
@@ -2405,7 +2436,10 @@ namespace TMPro
             m_inputSource = TextInputSources.TextString;
 
             PopulateTextProcessingArray();
-
+            if(!didChange)
+            {
+                return;
+            }
             m_havePropertiesChanged = true;
 
             SetVerticesDirty();
@@ -2782,7 +2816,7 @@ namespace TMPro
         /// <param name="length">The number of characters in the array to be read.</param>
         public void SetCharArray(char[] sourceText, int start, int length)
         {
-            PopulateTextBackingArray(sourceText, start, length);
+            bool didChange = PopulateTextBackingArray(sourceText, start, length);
 
             m_IsTextBackingStringDirty = true;
 
@@ -2792,7 +2826,10 @@ namespace TMPro
 
             // Set input source
             m_inputSource = TextInputSources.SetTextArray;
-
+            if(!didChange)
+            {
+                return;
+            }
             PopulateTextProcessingArray();
 
             m_havePropertiesChanged = true;
@@ -3999,7 +4036,8 @@ namespace TMPro
                     switch (charCode)
                     {
                         case 0x03:
-                            m_internalCharacterInfo[m_characterCount].textElement = m_currentFontAsset.characterLookupTable[0x03];
+                            ref TMP_Character lookupCha = ref m_currentFontAsset.characterLookupTable.TryGet(0x03, out bool foundChar);
+                            m_internalCharacterInfo[m_characterCount].textElement = foundChar ? lookupCha : null;
                             m_isTextTruncated = true;
                             break;
                         case 0x2D:
@@ -5086,6 +5124,7 @@ namespace TMPro
             state.tagNoParsing = tag_NoParsing;
 
             state.fxRotation = m_FXRotation;
+            state.hasFxRotation = m_HasFXRotationSet;
             state.fxScale = m_FXScale;
 
             // XML Tag Stack
@@ -5182,6 +5221,7 @@ namespace TMPro
             tag_NoParsing = state.tagNoParsing;
 
             m_FXRotation = state.fxRotation;
+            m_HasFXRotationSet = state.hasFxRotation;
             m_FXScale = state.fxScale;
 
             // XML Tag Stack
@@ -8296,10 +8336,11 @@ namespace TMPro
                         if (value == Int16.MinValue) return false;
 
                         m_FXRotation = Quaternion.Euler(0, 0, value);
-
+                        m_HasFXRotationSet = true;
                         return true;
                     case MarkupTag.SLASH_ROTATE:
                         m_FXRotation = Quaternion.identity;
+                        m_HasFXRotationSet = false;
                         return true;
                     case MarkupTag.TABLE:
                         //switch (m_xmlAttribute[1].nameHashCode)

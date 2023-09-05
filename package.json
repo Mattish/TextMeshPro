@@ -13,7 +13,10 @@
   ],
   "category": "Text Rendering",
   "dependencies": {
-    "com.unity.ugui": "1.0.0"
+    "com.unity.ugui": "1.0.0",
+    "com.unity.burst": "1.8.4",
+    "com.unity.mathematics": "1.2.1",
+    "com.unity.profiling.core": "1.0.2"
   },
   "_upm": {
     "changelog": "### Changes\n- Fixed Input Field not handling submit and cancel for Gamepad and other input devices. [UUM-5093](https://issuetracker.unity3d.com/issues/gamepad-cannot-submit-or-exit-inputfield)\n- Fixed Input Field showing square character and warning when control characters are entered. (UUM-24871)\n- Fixed TextMeshPro crash when upgrading materials. Case #TMPB-187\n- Ensured PreferredHeight handles various line heights correctly in TextMeshPro. Case #TMPB-165\n- Set FaceInfo setter to public in TextMeshPro. Case #TMPB-182\n- Ensured sprites used correct indexes in TextMeshPro. Case #TMPB-200\n- Made Maskable now propagates to SubMesh in TextMeshPro. Case #TMPB-191\n- Added missing _ScaleRatioA to HDRP and URP shaders in TextMeshPro. Case #TMPB-169\n- Fixed TextCore crash when upgrading materials. Case #UUM-32513"

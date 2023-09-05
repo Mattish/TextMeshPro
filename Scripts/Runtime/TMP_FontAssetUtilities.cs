@@ -57,6 +57,50 @@ namespace TMPro
             return GetCharacterFromFontAsset_Internal(unicode, sourceFontAsset, includeFallbacks, fontStyle, fontWeight, out isAlternativeTypeface);
         }
 
+        public static bool TryGetCharacterFromFontAsset_Direct(uint unicode, TMP_FontAsset sourceFontAsset, out TMP_CacheCalculatedCharacter calculatedCharacter)
+        {
+            ref TMP_CacheCalculatedCharacter foundCharacter = ref sourceFontAsset.m_CachedCalculatedCharacterLookup.TryGet(unicode, out bool found);
+            if (found)
+            {
+                calculatedCharacter = foundCharacter;
+                return true;
+            }
+
+            if (sourceFontAsset.atlasPopulationMode == AtlasPopulationMode.Dynamic || sourceFontAsset.atlasPopulationMode == AtlasPopulationMode.DynamicOS)
+            {
+                if(sourceFontAsset.TryAddCharacterInternal(unicode, out TMP_Character character))
+                {
+                    foundCharacter = ref sourceFontAsset.m_CachedCalculatedCharacterLookup.TryGet(unicode, out found);
+                    calculatedCharacter = foundCharacter;
+                    return true;
+                }
+            }
+
+            calculatedCharacter = default;
+            return false;
+        }
+
+        public static bool TryGetCharacterFromFontAsset_DirectRef(uint unicode, TMP_FontAsset sourceFontAsset, ref TMP_CacheCalculatedCharacter calculatedCharacter)
+        {
+            calculatedCharacter = sourceFontAsset.m_CachedCalculatedCharacterLookup.TryGet(unicode, out bool found);
+            if (found)
+            {
+                return true;
+            }
+
+            if (sourceFontAsset.atlasPopulationMode == AtlasPopulationMode.Dynamic || sourceFontAsset.atlasPopulationMode == AtlasPopulationMode.DynamicOS)
+            {
+                if(sourceFontAsset.TryAddCharacterInternal(unicode, out TMP_Character character))
+                {
+                    calculatedCharacter = sourceFontAsset.m_CachedCalculatedCharacterLookup.TryGet(unicode, out found);
+                    return true;
+                }
+            }
+
+            calculatedCharacter = default;
+            return false;
+        }
+
 
         /// <summary>
         /// Internal function returning the text element character for the given unicode value taking into consideration the font style and weight.
@@ -112,16 +156,11 @@ namespace TMPro
 
                 if (temp != null)
                 {
-                    if (temp.characterLookupTable.TryGetValue(unicode, out character))
+                    ref TMP_Character tmpCharacter = ref temp.characterLookupTable.TryGet(unicode, out bool found);
+                    if (found)
                     {
-                        if (character.textAsset != null)
-                        {
-                            isAlternativeTypeface = true;
-                            return character;
-                        }
-
-                        // Remove character from lookup table
-                        temp.characterLookupTable.Remove(unicode);
+                        isAlternativeTypeface = true;
+                        return tmpCharacter;
                     }
 
                     if (temp.atlasPopulationMode == AtlasPopulationMode.Dynamic || temp.atlasPopulationMode == AtlasPopulationMode.DynamicOS)
@@ -155,13 +194,10 @@ namespace TMPro
             #endregion
 
             // Search the source font asset for the requested character.
-            if (sourceFontAsset.characterLookupTable.TryGetValue(unicode, out character))
+            ref TMP_Character sourceCharacter = ref sourceFontAsset.characterLookupTable.TryGet(unicode, out bool sourceCharacterFound);
+            if (sourceCharacterFound)
             {
-                if (character.textAsset != null)
-                    return character;
-
-                // Remove character from lookup table
-                sourceFontAsset.characterLookupTable.Remove(unicode);
+                return sourceCharacter;
             }
 
             if (sourceFontAsset.atlasPopulationMode == AtlasPopulationMode.Dynamic || sourceFontAsset.atlasPopulationMode == AtlasPopulationMode.DynamicOS)
@@ -418,9 +454,9 @@ namespace TMPro
         // FONT ENGINE & FONT FILE MANAGEMENT - Fields, Properties and Functions
         // =====================================================================
 
-        /*
         private static bool k_IsFontEngineInitialized;
 
+        /*
         private static bool TryGetCharacterFromFontFile(uint unicode, TMP_FontAsset fontAsset, out TMP_Character character)
         {
             character = null;

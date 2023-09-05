@@ -1,7 +1,11 @@
 {
     "name": "Unity.TextMeshPro",
     "rootNamespace": "",
-    "references": [],
+    "references": [
+        "Unity.Mathematics",
+        "Unity.Burst",
+        "Unity.Profiling.Core"
+    ],
     "includePlatforms": [],
     "excludePlatforms": [],
     "allowUnsafeCode": true,

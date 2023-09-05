@@ -46,6 +46,12 @@ namespace TMPro
         /// </summary>
         public float scale { get { return m_Scale; } set { m_Scale = value; } }
 
+        /// <summary>
+        /// Mattish Optimization. Cached IsWhiteSpace
+        /// </summary>
+        /// <returns></returns>
+        public bool IsWhiteSpace;
+
         // =============================================
         // Private backing fields for public properties.
         // =============================================

@@ -382,8 +382,12 @@ namespace TMPro
         {
             get
             {
-                if (m_Mesh == null)
+                if(m_Mesh == null)
+                {
                     m_Mesh = new Mesh();
+                    m_Mesh.MarkDynamic();
+                    m_Mesh.SetVertexBufferParams(0, TMP_MeshInfo.DefaultMeshDescriptors);
+                }
                 return m_Mesh;
             }
         }

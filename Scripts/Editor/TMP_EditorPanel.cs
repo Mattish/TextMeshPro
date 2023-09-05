@@ -58,6 +58,21 @@ namespace TMPro.EditorUtilities
             k_SortingLayerNames = SortingLayerHelper.sortingLayerNames;
         }
 
+        protected override void DrawExtraSettingsMattish()
+        {
+            Rect rect = EditorGUILayout.GetControlRect(false, 24);
+
+            if (GUI.Button(rect, new GUIContent("<b>Extra Settings</b>"), TMP_UIStyleManager.sectionHeader))
+                Foldout.extraSettings = !Foldout.extraSettings;
+
+            GUI.Label(rect, (Foldout.extraSettings ? "" : k_UiStateLabel[1]), TMP_UIStyleManager.rightLabel);
+
+            if (Foldout.extraSettings)
+            {
+                DrawOrthographicMode();
+            }
+        }
+
         protected override void DrawExtraSettings()
         {
             Rect rect = EditorGUILayout.GetControlRect(false, 24);

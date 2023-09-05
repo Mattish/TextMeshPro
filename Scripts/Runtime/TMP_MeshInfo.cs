@@ -3,6 +3,8 @@ using System;
 using System.Linq;
 using System.Collections;
 using System.Collections.Generic;
+using System.Runtime.InteropServices;
+using Unity.Mathematics;
 using UnityEngine.Rendering;
 
 
@@ -10,11 +12,35 @@ namespace TMPro
 {
     public enum VertexSortingOrder { Normal, Reverse };
 
+    [StructLayout(LayoutKind.Explicit)]
+    public struct TMP_MeshVertex
+    {
+        [FieldOffset(0)]
+        public float3 Position;
+        [FieldOffset(12)]
+        public uint Color;
+        [FieldOffset(16)]
+        public float4 TextCoord0;
+        [FieldOffset(32)]
+        public float2 TextCoord1;
+    }
+
     /// <summary>
     /// Structure which contains the vertex attributes (geometry) of the text object.
     /// </summary>
     public struct TMP_MeshInfo
     {
+        internal readonly static VertexAttributeDescriptor[] DefaultMeshDescriptors = new[]
+        {
+            new VertexAttributeDescriptor(VertexAttribute.Position, VertexAttributeFormat.Float32, 3),
+            new VertexAttributeDescriptor(VertexAttribute.Color, VertexAttributeFormat.UNorm8, 4),
+            new VertexAttributeDescriptor(VertexAttribute.TexCoord0, VertexAttributeFormat.Float32, 4),
+            new VertexAttributeDescriptor(VertexAttribute.TexCoord1, VertexAttributeFormat.Float32, 2),
+            new VertexAttributeDescriptor(VertexAttribute.Normal, VertexAttributeFormat.Float32, 3, 1),
+            new VertexAttributeDescriptor(VertexAttribute.Tangent, VertexAttributeFormat.Float32, 4, 1),
+        };
+        
+        
         private static readonly Color32 s_DefaultColor = new Color32(byte.MaxValue, byte.MaxValue, byte.MaxValue, byte.MaxValue);
         private static readonly Vector3 s_DefaultNormal = new Vector3(0.0f, 0.0f, -1f);
         private static readonly Vector4 s_DefaultTangent = new Vector4(-1f, 0.0f, 0.0f, 1f);
@@ -58,10 +84,16 @@ namespace TMPro
             //this.textComponent = null;
 
             // Clear existing mesh data
-            if (mesh == null)
+            if(mesh == null)
+            {
                 mesh = new Mesh();
+                mesh.MarkDynamic();
+                mesh.SetVertexBufferParams(0, TMP_MeshInfo.DefaultMeshDescriptors);
+            }
             else
+            {
                 mesh.Clear();
+            }
 
             this.mesh = mesh;
 
@@ -92,12 +124,16 @@ namespace TMPro
                 {
                     this.vertices[index_X4 + i] = Vector3.zero;
                     this.uvs0[index_X4 + i] = Vector2.zero;
-                    this.uvs2[index_X4 + i] = Vector2.zero;
                     //this.uvs4[index_X4 + i] = Vector2.zero;
                     this.colors32[index_X4 + i] = s_DefaultColor;
                     this.normals[index_X4 + i] = s_DefaultNormal;
                     this.tangents[index_X4 + i] = s_DefaultTangent;
                 }
+                
+                this.uvs2[0 + index_X4] = new Vector2(0, 0);
+                this.uvs2[1 + index_X4] = new Vector2(0, 1);
+                this.uvs2[2 + index_X4] = new Vector2(1, 1);
+                this.uvs2[3 + index_X4] = new Vector2(1, 0);
 
                 this.triangles[index_X6 + 0] = index_X4 + 0;
                 this.triangles[index_X6 + 1] = index_X4 + 1;
@@ -132,10 +168,16 @@ namespace TMPro
             //this.textComponent = null;
 
             // Clear existing mesh data
-            if (mesh == null)
+            if(mesh == null)
+            {
                 mesh = new Mesh();
+                mesh.MarkDynamic();
+                mesh.SetVertexBufferParams(0, TMP_MeshInfo.DefaultMeshDescriptors);
+            }
             else
+            {
                 mesh.Clear();
+            }
 
             this.mesh = mesh;
 
@@ -304,6 +346,11 @@ namespace TMPro
                 this.triangles[3 + index_X6] = 2 + index_X4;
                 this.triangles[4 + index_X6] = 3 + index_X4;
                 this.triangles[5 + index_X6] = 0 + index_X4;
+
+                this.uvs2[0 + index_X4] = new Vector2(0, 0);
+                this.uvs2[1 + index_X4] = new Vector2(0, 1);
+                this.uvs2[2 + index_X4] = new Vector2(1, 1);
+                this.uvs2[3 + index_X4] = new Vector2(1, 0);
             }
 
             this.mesh.vertices = this.vertices;
@@ -433,6 +480,11 @@ namespace TMPro
                     this.triangles[index_X6 + 34] = index_X4 + 4;
                     this.triangles[index_X6 + 35] = index_X4 + 7;
                 }
+                
+                this.uvs2[0 + index_X4] = new Vector2(0, 0);
+                this.uvs2[1 + index_X4] = new Vector2(0, 1);
+                this.uvs2[2 + index_X4] = new Vector2(1, 1);
+                this.uvs2[3 + index_X4] = new Vector2(1, 0);
             }
 
             this.mesh.vertices = this.vertices;

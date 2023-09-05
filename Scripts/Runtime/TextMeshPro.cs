@@ -1,17 +1,112 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
+using System.Numerics;
+using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
+using Unity.Burst;
+using Unity.Collections;
+using Unity.Collections.LowLevel.Unsafe;
+using Unity.Mathematics;
 using UnityEngine;
+using UnityEngine.Rendering;
 using UnityEngine.UI;
 using UnityEngine.TextCore;
 using UnityEngine.TextCore.LowLevel;
+using Debug = UnityEngine.Debug;
+using Matrix4x4 = UnityEngine.Matrix4x4;
 using Unity.Profiling;
 using Object = UnityEngine.Object;
+using Quaternion = UnityEngine.Quaternion;
+using Vector2 = UnityEngine.Vector2;
+using Vector3 = UnityEngine.Vector3;
+using Vector4 = UnityEngine.Vector4;
 
 #pragma warning disable 0414 // Disabled a few warnings related to serialized variables not used in this script but used in the editor.
 
 
 namespace TMPro
 {
+    [BurstCompile(CompileSynchronously = true)]
+    internal static class TextMeshProBurst
+    {
+        [BurstCompile(CompileSynchronously = true, OptimizeFor = OptimizeFor.Performance)]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static unsafe void BurstCompiled_CalculatePositionUVColor([NoAlias] in TMP_MeshVertex* verts,[NoAlias] in float4 glyph4, [NoAlias] in float4 parameters, [NoAlias] in float4 glyphBox, 
+            [NoAlias] in MattishBurstCharacterStaticDetails burstCharacterStaticDetails)
+        {
+            //float xAdvance, float baselineOffset, float adjustedScale
+            float4 lrdu = glyph4 * parameters.z;
+            float4 base4 = glyphBox * burstCharacterStaticDetails.UvAtlasWidthHeight4;
+            lrdu += new float4(parameters.x, lrdu.x + parameters.x, parameters.y, parameters.y);
+            
+            verts[0].Position = new float3(lrdu.x, lrdu.z, 0);
+            verts[0].Color = burstCharacterStaticDetails.ColorSrc.x;
+            verts[0].TextCoord0 = new Vector4(base4.x, base4.y, 0, burstCharacterStaticDetails.XScale);
+            
+            verts[1].Position = new float3(lrdu.x, lrdu.w, 0);
+            verts[1].Color = burstCharacterStaticDetails.ColorSrc.y;
+            verts[1].TextCoord0 = new Vector4(base4.x, base4.w, 0, burstCharacterStaticDetails.XScale);
+            
+            verts[2].Position = new float3(lrdu.y, lrdu.w, 0);
+            verts[2].Color = burstCharacterStaticDetails.ColorSrc.z;
+            verts[2].TextCoord0 = new Vector4(base4.z, base4.w, 0, burstCharacterStaticDetails.XScale);
+            
+            verts[3].Position = new float3(lrdu.y, lrdu.z, 0);
+            verts[3].Color = burstCharacterStaticDetails.ColorSrc.w;
+            verts[3].TextCoord0 = new Vector4(base4.z, base4.y, 0, burstCharacterStaticDetails.XScale);
+        }
+        
+        [BurstCompile(CompileSynchronously = true)]
+        public static unsafe void BurstCompiled_OffsetQuadPositionFull([NoAlias] in TMP_MeshVertex* positions,[NoAlias] in MattishCaseLineInfo* lines, int lineInfoCount)
+        {
+            TMP_MeshVertex* pos = positions;
+            
+            for(int lineIndex = 0; lineIndex < lineInfoCount; lineIndex++)
+            {
+                ref MattishCaseLineInfo lineInfo = ref lines[lineIndex];
+                float3 offset = new(lineInfo.CalculatedAlignmentJustificationOffset.x, -(lineInfo.LineYOffset + lineInfo.CalculatedAlignmentJustificationOffset.y), 0);
+
+                int total = lineInfo.Length * 4;
+                for(int i = 0; i < total; i += 4)
+                {
+                    pos[i].Position     += offset;
+                    pos[i + 1].Position += offset;
+                    pos[i + 2].Position += offset;
+                    pos[i + 3].Position += offset;
+                }
+
+                pos += total;
+            }
+        }
+        
+    }
+    
+    internal struct MattishBurstCharacterStaticDetails
+    {
+        public float4 UvAtlasWidthHeight4;
+        public uint4 ColorSrc;
+        public float XScale;
+    }
+    
+    internal struct MattishCaseLineInfo
+    {
+        public float TotalWidth;
+        public float LineYOffset;
+        public int Length;
+        public Vector2 CalculatedAlignmentJustificationOffset;
+    }
+    
+    [StructLayout(LayoutKind.Explicit)]
+    internal struct CharacterProcessDetails
+    {
+        [FieldOffset(0)]
+        public int CalculatedLineNumber;
+        [FieldOffset(4)]
+        public int MaterialReferenceIndex;
+        [FieldOffset(8)]
+        public int IsLineBreak;
+    }
 
     [DisallowMultipleComponent]
     [RequireComponent(typeof(MeshRenderer))]
@@ -143,6 +238,8 @@ namespace TMPro
                 if (m_mesh == null)
                 {
                     m_mesh = new Mesh();
+                    m_mesh.MarkDynamic();
+                    m_mesh.SetVertexBufferParams(0, TMP_MeshInfo.DefaultMeshDescriptors);
                     m_mesh.hideFlags = HideFlags.HideAndDontSave;
                 }
 
@@ -539,6 +636,28 @@ namespace TMPro
         private static ProfilerMarker k_GenerateTextPhaseIIMarker = new ProfilerMarker("TMP GenerateText - Phase II");
         private static ProfilerMarker k_GenerateTextPhaseIIIMarker = new ProfilerMarker("TMP GenerateText - Phase III");
 
+        public readonly static ProfilerCategory ProfilerCategory = ProfilerCategory.Scripts;
+        private static ProfilerCounterValue<long> MattCounter1Value =
+            new(ProfilerCategory, "MattCounterValue",
+                ProfilerMarkerDataUnit.TimeNanoseconds, ProfilerCounterOptions.FlushOnEndOfFrame | ProfilerCounterOptions.ResetToZeroOnFlush);
+        private static ProfilerCounterValue<long> MattCounter2Value =
+            new(ProfilerCategory, "MattCounter2Value",
+                ProfilerMarkerDataUnit.TimeNanoseconds, ProfilerCounterOptions.FlushOnEndOfFrame | ProfilerCounterOptions.ResetToZeroOnFlush);
+        private static ProfilerCounterValue<long> MattCounter3Value =
+            new(ProfilerCategory, "MattCounter3Value",
+                ProfilerMarkerDataUnit.TimeNanoseconds, ProfilerCounterOptions.FlushOnEndOfFrame | ProfilerCounterOptions.ResetToZeroOnFlush);
+        private static ProfilerCounterValue<long> MattCounter4Value =
+            new(ProfilerCategory, "MattCounter4Value",
+                ProfilerMarkerDataUnit.TimeNanoseconds, ProfilerCounterOptions.FlushOnEndOfFrame | ProfilerCounterOptions.ResetToZeroOnFlush);
+        private static ProfilerCounterValue<long> MattCounter5Value =
+            new(ProfilerCategory, "MattCounter5Value",
+                ProfilerMarkerDataUnit.TimeNanoseconds, ProfilerCounterOptions.FlushOnEndOfFrame | ProfilerCounterOptions.ResetToZeroOnFlush);
+        private static ProfilerCounterValue<long> MattCounter6Value =
+            new(ProfilerCategory, "MattCounter6Value",
+                ProfilerMarkerDataUnit.TimeNanoseconds, ProfilerCounterOptions.FlushOnEndOfFrame | ProfilerCounterOptions.ResetToZeroOnFlush);
+        private static ProfilerCounterValue<long> MattCountValue =
+            new(ProfilerCategory, "MattCount",
+                ProfilerMarkerDataUnit.Count, ProfilerCounterOptions.FlushOnEndOfFrame | ProfilerCounterOptions.ResetToZeroOnFlush);
 
         protected override void Awake()
         {
@@ -576,6 +695,8 @@ namespace TMPro
             if (m_mesh == null)
             {
                 m_mesh = new Mesh();
+                m_mesh.MarkDynamic();
+                m_mesh.SetVertexBufferParams(0, TMP_MeshInfo.DefaultMeshDescriptors);
                 m_mesh.hideFlags = HideFlags.HideAndDontSave;
                 #if DEVELOPMENT_BUILD || UNITY_EDITOR
                 m_mesh.name = "TextMeshPro Mesh";
@@ -1404,6 +1525,11 @@ namespace TMPro
         // This function parses through the Char[] to determine how many characters will be visible. It then makes sure the arrays are large enough for all those characters.
         internal override int SetArraySizes(TextProcessingElement[] textProcessingArray)
         {
+            if(m_isMattishOptimization)
+            {
+                return -1; // We don't parse and assign separately
+            }
+
             k_SetArraySizesMarker.Begin();
 
             int spriteCount = 0;
@@ -1826,7 +1952,7 @@ namespace TMPro
 
             // Save material and sprite count.
             m_textInfo.spriteCount = spriteCount;
-            int materialCount = m_textInfo.materialCount = m_materialReferenceIndexLookup.Count;
+            int materialCount = m_textInfo.materialCount = (int)m_materialReferenceIndexLookup.Length();
 
             // Check if we need to resize the MeshInfo array for handling different materials.
             if (materialCount > m_textInfo.meshInfo.Length)
@@ -2087,457 +2213,547 @@ namespace TMPro
             }
         }
 
-        protected virtual void SaveGlyphVertexInfo2(ref TMP_CharacterInfo character, float padding, float style_padding, Color32 vertexColor)
+        private void GetQuadColors(Color32 vertexColor, Span<Color32> returnColors)
         {
-            // Save the Vertex Position for the Character
-            #region Setup Mesh Vertices
-            character.vertex_BL.position = character.bottomLeft;
-            character.vertex_TL.position = character.topLeft;
-            character.vertex_TR.position = character.topRight;
-            character.vertex_BR.position = character.bottomRight;
-            #endregion
-
-
-            #region Setup Vertex Colors
-            // Alpha is the lower of the vertex color or tag color alpha used.
             vertexColor.a = m_fontColor32.a < vertexColor.a ? m_fontColor32.a : vertexColor.a;
-
-            #if TEXTCORE_FONT_ENGINE_1_5_OR_NEWER
-            bool isColorGlyph = ((GlyphRasterModes)m_currentFontAsset.m_AtlasRenderMode & GlyphRasterModes.RASTER_MODE_COLOR) == GlyphRasterModes.RASTER_MODE_COLOR;
-            #else
-            bool isColorGlyph = false;
-            #endif
-
-            // Handle Vertex Colors & Vertex Color Gradient
-            if (!m_enableVertexGradient || isColorGlyph)
+            
+            if (!m_enableVertexGradient)
             {
-                // Special handling for color glyphs
-                vertexColor = isColorGlyph ? new Color32(255, 255, 255, vertexColor.a) : vertexColor;
-
-                character.vertex_BL.color = vertexColor;
-                character.vertex_TL.color = vertexColor;
-                character.vertex_TR.color = vertexColor;
-                character.vertex_BR.color = vertexColor;
+                returnColors[0] = vertexColor;
+                returnColors[1] = vertexColor;
+                returnColors[2] = vertexColor;
+                returnColors[3] = vertexColor;
             }
             else
             {
-                if (!m_overrideHtmlColors && m_colorStack.index > 1)
+                // Use Vertex Color Gradient Preset (if one is assigned)
+                if (!ReferenceEquals(m_fontColorGradientPreset,null))
                 {
-                    character.vertex_BL.color = vertexColor;
-                    character.vertex_TL.color = vertexColor;
-                    character.vertex_TR.color = vertexColor;
-                    character.vertex_BR.color = vertexColor;
+                    returnColors[0] = m_fontColorGradientPreset.bottomLeft * vertexColor;
+                    returnColors[1] = m_fontColorGradientPreset.topLeft * vertexColor;
+                    returnColors[2] = m_fontColorGradientPreset.topRight * vertexColor;
+                    returnColors[3] = m_fontColorGradientPreset.bottomRight * vertexColor;
                 }
-                else // Handle Vertex Color Gradient
+                else
                 {
-                    // Use Vertex Color Gradient Preset (if one is assigned)
-                    if (!ReferenceEquals(m_fontColorGradientPreset,null))
-                    {
-                        character.vertex_BL.color = m_fontColorGradientPreset.bottomLeft * vertexColor;
-                        character.vertex_TL.color = m_fontColorGradientPreset.topLeft * vertexColor;
-                        character.vertex_TR.color = m_fontColorGradientPreset.topRight * vertexColor;
-                        character.vertex_BR.color = m_fontColorGradientPreset.bottomRight * vertexColor;
-                    }
-                    else
-                    {
-                        character.vertex_BL.color = m_fontColorGradient.bottomLeft * vertexColor;
-                        character.vertex_TL.color = m_fontColorGradient.topLeft * vertexColor;
-                        character.vertex_TR.color = m_fontColorGradient.topRight * vertexColor;
-                        character.vertex_BR.color = m_fontColorGradient.bottomRight * vertexColor;
-                    }
+                    returnColors[0] = m_fontColorGradient.bottomLeft * vertexColor;
+                    returnColors[1] = m_fontColorGradient.topLeft * vertexColor;
+                    returnColors[2] = m_fontColorGradient.topRight * vertexColor;
+                    returnColors[3] = m_fontColorGradient.bottomRight * vertexColor;
                 }
             }
 
-            if (!ReferenceEquals(m_colorGradientPreset, null) && !isColorGlyph)
+            if (!ReferenceEquals(m_colorGradientPreset, null))
             {
                 if (m_colorGradientPresetIsTinted)
                 {
-                    character.vertex_BL.color *= m_colorGradientPreset.bottomLeft;
-                    character.vertex_TL.color *= m_colorGradientPreset.topLeft;
-                    character.vertex_TR.color *= m_colorGradientPreset.topRight;
-                    character.vertex_BR.color *= m_colorGradientPreset.bottomRight;
+                    returnColors[0] *= m_colorGradientPreset.bottomLeft;
+                    returnColors[1] *= m_colorGradientPreset.topLeft;
+                    returnColors[2] *= m_colorGradientPreset.topRight;
+                    returnColors[3] *= m_colorGradientPreset.bottomRight;
                 }
                 else
                 {
-                    character.vertex_BL.color = m_colorGradientPreset.bottomLeft.MinAlpha(vertexColor);
-                    character.vertex_TL.color = m_colorGradientPreset.topLeft.MinAlpha(vertexColor);
-                    character.vertex_TR.color = m_colorGradientPreset.topRight.MinAlpha(vertexColor);
-                    character.vertex_BR.color = m_colorGradientPreset.bottomRight.MinAlpha(vertexColor);
+                    returnColors[0] = m_colorGradientPreset.bottomLeft.MinAlpha(vertexColor);
+                    returnColors[1] = m_colorGradientPreset.topLeft.MinAlpha(vertexColor);
+                    returnColors[2] = m_colorGradientPreset.topRight.MinAlpha(vertexColor);
+                    returnColors[3] = m_colorGradientPreset.bottomRight.MinAlpha(vertexColor);
                 }
             }
-            #endregion
 
-            // Apply style_padding only if this is a SDF Shader.
-            if (!m_isSDFShader)
-                style_padding = 0f;
-
-
-            // Setup UVs for the Character
-            #region Setup UVs
-
-            Glyph altGlyph = character.alternativeGlyph;
-            GlyphRect glyphRect = altGlyph == null ? m_cached_TextElement.m_Glyph.glyphRect : altGlyph.glyphRect;
-
-            // Store UV Information
-            character.vertex_BL.uv.x = (glyphRect.x - padding - style_padding) / m_currentFontAsset.m_AtlasWidth;
-            character.vertex_BL.uv.y = (glyphRect.y - padding - style_padding) / m_currentFontAsset.m_AtlasHeight;
-            character.vertex_TL.uv.x = character.vertex_BL.uv.x;
-            character.vertex_TL.uv.y = (glyphRect.y + padding + style_padding + glyphRect.height) / m_currentFontAsset.m_AtlasHeight;
-            character.vertex_TR.uv.x = (glyphRect.x + padding + style_padding + glyphRect.width) / m_currentFontAsset.m_AtlasWidth;
-            character.vertex_TR.uv.y = character.vertex_TL.uv.y;
-            character.vertex_BR.uv.x = character.vertex_TR.uv.x;
-            character.vertex_BR.uv.y = character.vertex_BL.uv.y;
-            #endregion Setup UVs
-
-
-            // Normal
-            #region Setup Normals & Tangents
-            //Vector3 normal = new Vector3(0, 0, -1);
-            //m_textInfo.characterInfo[m_characterCount].vertex_BL.normal = normal;
-            //m_textInfo.characterInfo[m_characterCount].vertex_TL.normal = normal;
-            //m_textInfo.characterInfo[m_characterCount].vertex_TR.normal = normal;
-            //m_textInfo.characterInfo[m_characterCount].vertex_BR.normal = normal;
-
-            // Tangents
-            //Vector4 tangent = new Vector4(-1, 0, 0, 1);
-            //m_textInfo.characterInfo[m_characterCount].vertex_BL.tangent = tangent;
-            //m_textInfo.characterInfo[m_characterCount].vertex_TL.tangent = tangent;
-            //m_textInfo.characterInfo[m_characterCount].vertex_TR.tangent = tangent;
-            //m_textInfo.characterInfo[m_characterCount].vertex_BR.tangent = tangent;
-            #endregion end Normals & Tangents
+            if(m_ConvertToLinearSpace)
+            {
+                returnColors[0] = returnColors[0].GammaToLinear();
+                returnColors[1] = returnColors[1].GammaToLinear();
+                returnColors[2] = returnColors[2].GammaToLinear();
+                returnColors[3] = returnColors[3].GammaToLinear();
+            }
         }
-
-
-        private struct NormalCaseLineInfo
+        
+        private static TMP_MeshVertex[] vertsBuffer = new TMP_MeshVertex[2048];
+        
+        private readonly static MattishCaseLineInfo[] mattishCaseLineInfos = new MattishCaseLineInfo[256];
+        private static int lineInfoCount = 0;
+        
+        // Lean details requires to layout characters
+        private static CharacterProcessDetails[] CalculatedCharacterDetails = new CharacterProcessDetails[2048];
+        
+        private unsafe void DoMattishCaseGenerateTextMesh(TextProcessingElement[] textProcessingArray)
         {
-            public int StartIndex;
-            public int Count;
-            public float TotalWidth;
-            public float MaxAscender;
-            public float MinDescender;
-            public float LineYOffset;
-            public Vector2 CalculatedAlignmentJustificationOffset;
-        }
-
-        private readonly List<NormalCaseLineInfo> normalCaseLineInfos = new();
-        private void DoNormalCaseGenerateTextMesh()
-        {
-            k_Matt1Marker.Begin();
-            normalCaseLineInfos.Clear();
-            m_characterCount = 0;
+            float orthographicAdjustmentFactor = (m_isOrthographic ? 1 : 0.1f);
+            float adjustedScale = m_fontSize * (1.0f / m_fontAsset.m_FaceInfo.pointSize) * orthographicAdjustmentFactor;
+            
+            // Setup all our required state...
+            lineInfoCount = 0;
             m_xAdvance = 0;
             m_lineOffset = 0;
-            m_currentFontSize = m_fontSize;
-            m_fontScaleMultiplier = 1;
             m_fontColor32 = m_fontColor;
             m_htmlColor = m_fontColor32;
             m_lineJustification = horizontalAlignment;
-            
-            float orthographicAdjustmentFactor = (m_isOrthographic ? 1 : 0.1f);
-            float boldSpacingAdjustment = 0;
-            float characterSpacingAdjustment = m_characterSpacing;
-            int totalCharacterCount = m_totalCharacterCount;
-            float adjustedScale = m_currentFontSize * (1.0f / m_currentFontAsset.m_FaceInfo.pointSize) * m_currentFontAsset.m_FaceInfo.scale * orthographicAdjustmentFactor;
-            float baselineOffset = m_currentFontAsset.m_FaceInfo.baseline * adjustedScale * m_fontScaleMultiplier * m_currentFontAsset.m_FaceInfo.scale;
+            m_currentFontAsset = m_fontAsset;
+            m_currentMaterial = m_sharedMaterial;
+            m_currentMaterialIndex = 0;
+            int totalCharacterCount = 0;
+            float baselineOffset = m_currentFontAsset.m_FaceInfo.baseline * adjustedScale;
             float lineHeight = m_currentFontAsset.m_FaceInfo.lineHeight * adjustedScale;
             float elementAscentLine = m_currentFontAsset.m_FaceInfo.ascentLine * adjustedScale;
             float elementDescentLine = m_currentFontAsset.m_FaceInfo.descentLine * adjustedScale;
+            float normalSpacingCharacterSpacingOffset = m_currentFontAsset.normalSpacingOffset + m_characterSpacing;
+            float lossyScale = m_previousLossyScaleY = this.transform.lossyScale.y;
+            float xScale = adjustedScale * Mathf.Abs(lossyScale);
+            int atlasIndex = -1;
+            float4 calcPosBurstParams = new(0, baselineOffset, adjustedScale, 0);
+            float4 uvAtlasWidthHeight4 = new(1.0f / m_currentFontAsset.m_AtlasWidth, 1.0f / m_currentFontAsset.m_AtlasHeight, 1.0f / m_currentFontAsset.m_AtlasWidth, 1.0f / m_currentFontAsset.m_AtlasHeight);
             
-            NormalCaseLineInfo currentLine = new()
+            
+            ref MattishCaseLineInfo currentLine = ref mattishCaseLineInfos[0];
+            currentLine.Length = 1;
+            currentLine.LineYOffset = 0;
+            currentLine.TotalWidth = 0;
+            Span<int> materialIndexToCharCount = stackalloc int[16];
+            Span<Color32> quadColors = stackalloc Color32[4];
+            GetQuadColors(m_overrideHtmlColors ? m_fontColor32 : m_htmlColor, quadColors);
+            uint4 srcColors;
+            fixed(Color32* clrs2 = quadColors)
             {
-                MaxAscender = elementAscentLine,
-                MinDescender = elementDescentLine
+                srcColors = *(uint4*)clrs2;
+            }
+            MattishBurstCharacterStaticDetails burstCharacterStaticDetails = new(){
+                UvAtlasWidthHeight4 = uvAtlasWidthHeight4,
+                XScale = xScale,
+                ColorSrc = srcColors
             };
             
-            for(int i = 0; i < m_TextProcessingArray.Length && m_TextProcessingArray[i].unicode != 0 && m_characterCount < totalCharacterCount; i++)
-            {
-                uint charCode = m_TextProcessingArray[i].unicode;
+            m_materialReferenceIndexLookup.Clear();
+            atlasIndex = MaterialReference.AddMaterialReference(m_currentMaterial, m_currentFontAsset, ref m_materialReferences, m_materialReferenceIndexLookup);
+            
+            // ...State setup finished
+            
+            fixed(TMP_MeshVertex* verts = vertsBuffer)
+            {        
+                ref CharacterProcessDetails characterProgress = ref CalculatedCharacterDetails[0];
+                ref TMP_CacheCalculatedCharacter calculatedCharacter = ref TMP_CacheCalculatedCharacter.DefaultRef;
                 
-                ref TMP_CharacterInfo tmpCharacterInfo = ref m_textInfo.characterInfo[m_characterCount];
-                m_cached_TextElement = tmpCharacterInfo.textElement;
-
-                tmpCharacterInfo.elementType = TMP_TextElementType.Character;
-                tmpCharacterInfo.scale = adjustedScale * m_fontScaleMultiplier * m_cached_TextElement.m_Scale * m_cached_TextElement.m_Glyph.scale;
-                
-                GlyphMetrics currentGlyphMetrics = m_cached_TextElement.m_Glyph.metrics;
-
-                bool isWhiteSpace = charCode <= 0xFFFF && char.IsWhiteSpace((char)charCode);
-                
-                // line break
-                if(charCode == '\n')
+                for(int i = 0; i < textProcessingArray.Length && textProcessingArray[i].unicode != 0; i++)
                 {
-                    normalCaseLineInfos.Add(currentLine);
-                    currentLine = new()
-                    {
-                        Count = 0,
-                        TotalWidth = 0,
-                        StartIndex = i + 1,
-                        MaxAscender = elementAscentLine,
-                        MinDescender = elementDescentLine,
-                        LineYOffset = currentLine.LineYOffset + lineHeight
-                    };
-                    m_xAdvance = 0;
-                }
-
-                currentLine.MaxAscender = Mathf.Max(currentLine.MaxAscender, elementAscentLine);
-                currentLine.MinDescender = Mathf.Min(currentLine.MinDescender, elementDescentLine);
-
-                Vector3 topLeft;
-                topLeft.x = m_xAdvance + ((currentGlyphMetrics.horizontalBearingX) * adjustedScale * (1 - m_charWidthAdjDelta));
-                topLeft.y = baselineOffset + (currentGlyphMetrics.horizontalBearingY) * adjustedScale - m_lineOffset + m_baselineOffset;
-                topLeft.z = 0;
-
-                Vector3 bottomLeft;
-                bottomLeft.x = topLeft.x;
-                bottomLeft.y = topLeft.y - ((currentGlyphMetrics.height) * adjustedScale);
-                bottomLeft.z = 0;
-
-                Vector3 topRight;
-                topRight.x = bottomLeft.x + ((currentGlyphMetrics.width) * adjustedScale * (1 - m_charWidthAdjDelta));
-                topRight.y = topLeft.y;
-                topRight.z = 0;
-
-                Vector3 bottomRight;
-                bottomRight.x = topRight.x;
-                bottomRight.y = bottomLeft.y;
-                bottomRight.z = 0;
-
-                tmpCharacterInfo.bottomLeft = bottomLeft;
-                tmpCharacterInfo.topLeft = topLeft;
-                tmpCharacterInfo.topRight = topRight;
-                tmpCharacterInfo.bottomRight = bottomRight;
-                tmpCharacterInfo.origin = m_xAdvance;
-                tmpCharacterInfo.baseLine = (baselineOffset - m_lineOffset + m_baselineOffset);
-                tmpCharacterInfo.aspectRatio = (topRight.x - bottomLeft.x) / (topLeft.y - bottomLeft.y);
-                tmpCharacterInfo.isVisible = false;
-                tmpCharacterInfo.lineNumber = normalCaseLineInfos.Count;
-
-                m_xAdvance += ((currentGlyphMetrics.horizontalAdvance) * adjustedScale +
-                               (m_currentFontAsset.normalSpacingOffset + characterSpacingAdjustment + boldSpacingAdjustment) * adjustedScale + m_cSpacing) * (1 - m_charWidthAdjDelta);
-
-                if(isWhiteSpace || charCode == 0x200B)
-                {
-                    m_xAdvance += m_wordSpacing * (m_fontSize * 0.01f);
-                }
-
-                // Store xAdvance information
-                tmpCharacterInfo.xAdvance = m_xAdvance;
-
-                //TODO: check line info
-
-                if((isWhiteSpace == false && charCode != 0x200B && charCode != 0xAD && charCode != 0x03))
-                {
-                    tmpCharacterInfo.isVisible = true;
-                }
-
-                if(tmpCharacterInfo.isVisible)
-                {
-                    m_meshExtents.min.x = Mathf.Min(m_meshExtents.min.x, tmpCharacterInfo.bottomLeft.x);
-                    m_meshExtents.min.y = Mathf.Min(m_meshExtents.min.y, tmpCharacterInfo.bottomLeft.y);
-                    m_meshExtents.max.x = Mathf.Max(m_meshExtents.max.x, tmpCharacterInfo.topRight.x);
-                    m_meshExtents.max.y = Mathf.Max(m_meshExtents.max.y, tmpCharacterInfo.topRight.y);
-                }
-
-                Color32 vertexColor;
-                if(m_overrideHtmlColors)
-                    vertexColor = m_fontColor32;
-                else
-                    vertexColor = m_htmlColor;
-
-                SaveGlyphVertexInfo2(ref tmpCharacterInfo, 0, 0, vertexColor);
-
-                m_lineVisibleCharacterCount += 1;
-                m_lastVisibleCharacterOfLine = m_characterCount;
-
-                currentLine.Count++;
-                currentLine.TotalWidth = m_xAdvance;
-                m_characterCount++;
-            }
-            
-            // Finalise this line
-            normalCaseLineInfos.Add(currentLine);
-            
-            k_Matt1Marker.End();
-            
-            k_Matt2Marker.Begin();
-            if (m_characterCount == 0)
-            {
-                ClearMesh(true);
-                // Event indicating the text has been regenerated.
-                TMPro_EventManager.ON_TEXT_CHANGED(this);
-                return;
-            }
-            
-            m_textInfo.meshInfo[0].Clear(false);
-            
-            // The default positions of character lines places the first character in each line in the middle of the `m_rectTransform.rect`
-            // The origin position of characters is the bottom left corner at ascent y=0
-            
-            Rect rect = m_rectTransform.rect;
-            switch(m_lineJustification)
-            {
-                case HorizontalAlignmentOptions.Left:
-                    for(var i = 0; i < normalCaseLineInfos.Count; i++)
-                    {
-                        NormalCaseLineInfo normalCaseLineInfo = normalCaseLineInfos[i];
-                        normalCaseLineInfo.CalculatedAlignmentJustificationOffset.x = rect.xMin;
-                        normalCaseLineInfos[i] = normalCaseLineInfo;
-                    }
-                    break;
-                case HorizontalAlignmentOptions.Center:
-                    // Center alignment depends on the total length of each line to center based on content and the size of the text rect
-                    for(var i = 0; i < normalCaseLineInfos.Count; i++)
-                    {
-                        NormalCaseLineInfo normalCaseLineInfo = normalCaseLineInfos[i];
-                        normalCaseLineInfo.CalculatedAlignmentJustificationOffset.x = -normalCaseLineInfo.TotalWidth * 0.5f;
-                        normalCaseLineInfos[i] = normalCaseLineInfo;
-                    }
-                    break;
-                case HorizontalAlignmentOptions.Right:
-                    // Right alignment depends on the total length of each line, and may require negative offset if the line overflows
-                    for(var i = 0; i < normalCaseLineInfos.Count; i++)
-                    {
-                        NormalCaseLineInfo normalCaseLineInfo = normalCaseLineInfos[i];
-                        normalCaseLineInfo.CalculatedAlignmentJustificationOffset.x = rect.xMax - normalCaseLineInfo.TotalWidth;
-                        normalCaseLineInfos[i] = normalCaseLineInfo;
-                    }
-                    break;
-                case HorizontalAlignmentOptions.Justified:
-                case HorizontalAlignmentOptions.Flush:
-                case HorizontalAlignmentOptions.Geometry:
-                default:
-                    // ¯\_(ツ)_/¯
-                    break;
-            }
-
-            // We always have one line
-            float totalFirstLine = normalCaseLineInfos[0].MaxAscender;
-            
-            switch(m_VerticalAlignment)
-            {
-                case VerticalAlignmentOptions.Top:
-                    // Shift down from first line BL, then shift up based on rect height
-                    for(var i = 0; i < normalCaseLineInfos.Count; i++)
-                    {
-                        NormalCaseLineInfo normalCaseLineInfo = normalCaseLineInfos[i];
-                        normalCaseLineInfo.CalculatedAlignmentJustificationOffset.y = (totalFirstLine - rect.yMax);
-                        normalCaseLineInfos[i] = normalCaseLineInfo;
-                    }
-                    break;
-                case VerticalAlignmentOptions.Middle:
-                    // We always have one line, even if we have zero characters
-                    // The first line initial position is at BL...
-                    float totalHeightOfAllLines = ((normalCaseLineInfos.Count * -lineHeight) * 0.5f) + totalFirstLine;
-                    for(var i = 0; i < normalCaseLineInfos.Count; i++)
-                    {
-                        NormalCaseLineInfo normalCaseLineInfo = normalCaseLineInfos[i];
-                        normalCaseLineInfo.CalculatedAlignmentJustificationOffset.y = (totalHeightOfAllLines);
-                        normalCaseLineInfos[i] = normalCaseLineInfo;
-                    }
-
-                    break;
-                case VerticalAlignmentOptions.Bottom:
-                    // Shift down from last line BL
-
-                    NormalCaseLineInfo lastLineInfo = normalCaseLineInfos[normalCaseLineInfos.Count - 1];
+                    characterProgress = ref CalculatedCharacterDetails[totalCharacterCount];
+                    uint unicode = textProcessingArray[i].unicode;
+                    uint nextCharacter = textProcessingArray[i + 1].unicode;
                     
-                    for(var i = 0; i < normalCaseLineInfos.Count; i++)
+                    if(!TMP_FontAssetUtilities.TryGetCharacterFromFontAsset_DirectRef(unicode, m_currentFontAsset, ref calculatedCharacter))
                     {
-                        NormalCaseLineInfo normalCaseLineInfo = normalCaseLineInfos[i];
-                        normalCaseLineInfo.CalculatedAlignmentJustificationOffset.y = -rect.yMin - lastLineInfo.LineYOffset + lastLineInfo.MinDescender;
-                        normalCaseLineInfos[i] = normalCaseLineInfo;
+                        //TODO: ?
+                        //DoMissingGlyphCallback((int)unicode, textProcessingArray[i].stringIndex, m_currentFontAsset);
+                        unicode = textProcessingArray[i].unicode = (uint)TMP_Settings.missingGlyphCharacter == 0 ? 9633 : (uint)TMP_Settings.missingGlyphCharacter;
+                        TMP_FontAssetUtilities.TryGetCharacterFromFontAsset_DirectRef(unicode, m_currentFontAsset, ref calculatedCharacter);
+                        // If we don't have a missing glyph character here, we're donezo
                     }
-                    break;
-                case VerticalAlignmentOptions.Baseline:
-                case VerticalAlignmentOptions.Capline:
-                case VerticalAlignmentOptions.Geometry:
+
+                    // Assume we have space ahead in our look ahead and it's zero'd
+                    // TODO: unchecked improvement here, right?
+                    // nextCharacter - 0xFE00 <= 0xFE0F ?
+                    unchecked
+                    {
+                        //nextCharacter >= 0xFE00 && nextCharacter <= 0xFE0F
+                        if((nextCharacter - 0xFE0F) <= 0x0F)
+                        {
+                            uint variantGlyphIndex = m_currentFontAsset.GetGlyphVariantIndex((uint)unicode, nextCharacter);
+
+                            if(variantGlyphIndex != 0)
+                            {
+                                if(m_currentFontAsset.TryAddGlyphInternal(variantGlyphIndex, out Glyph glyph))
+                                {
+                                    calculatedCharacter = TMP_CacheCalculatedCharacter.Calcuate(glyph);
+                                }
+                            }
+
+                            ++i;
+                            // This only handles single glyph variants, I guess?
+                            //TODO: Handle changed variations? Are they even a thing? I assume they are with how emojis work
+                        }
+                    }
+
+                    if(atlasIndex != calculatedCharacter.AtlasIndex)
+                    {
+                        // TODO:`TMP_MaterialManager.GetFallbackMaterial` is bloated
+                        // it handles changing of material properties AND keeping atlas up to date on every character, no thanks
+                        Material targetMaterial = calculatedCharacter.AtlasIndex > 0
+                            ? TMP_MaterialManager.GetFallbackMaterial(m_currentFontAsset, m_currentMaterial, calculatedCharacter.AtlasIndex)
+                            : m_currentMaterial;
+                        m_currentMaterialIndex = MaterialReference.AddMaterialReference(targetMaterial, m_currentFontAsset, ref m_materialReferences, m_materialReferenceIndexLookup);
+                        materialIndexToCharCount[m_currentMaterialIndex]++;
+                        atlasIndex = calculatedCharacter.AtlasIndex;
+                    }
+                    else
+                    {
+                        materialIndexToCharCount[m_currentMaterialIndex]++;
+                    }
+
+                    // line break
+                    if(unicode == '\n')
+                    {
+                        characterProgress.IsLineBreak = 1;
+                        currentLine.TotalWidth = calcPosBurstParams.x;
+                        calcPosBurstParams.x = 0;
+                        currentLine = ref mattishCaseLineInfos[lineInfoCount + 1];
+                        currentLine.LineYOffset = lineHeight * (lineInfoCount + 1);
+                        currentLine.Length = 0;
+                        currentLine.TotalWidth = 0;
+                        ++lineInfoCount;
+                    }
+
+                    // This is where we actually calculate the quad
+                    {
+                        int bufferIndex = totalCharacterCount * 4;
+
+                        TextMeshProBurst.BurstCompiled_CalculatePositionUVColor(&verts[bufferIndex], in calculatedCharacter.GlyphMetrics4, in calcPosBurstParams,
+                            in calculatedCharacter.GlyphBox, in burstCharacterStaticDetails);
+                    }
+
+                    // Update the current line with the calculated width of the glyph
+                    ++currentLine.Length;
+                    ++totalCharacterCount;
+                    characterProgress.CalculatedLineNumber = lineInfoCount;
+                    characterProgress.MaterialReferenceIndex = m_currentMaterialIndex;
+                    calcPosBurstParams.x += (calculatedCharacter.GlyphHorizontalAdvance + normalSpacingCharacterSpacingOffset) * adjustedScale;
+                }
+                                    
+                m_lineVisibleCharacterCount = totalCharacterCount;
+                m_lastVisibleCharacterOfLine = totalCharacterCount;
+                m_characterCount = totalCharacterCount;
+
+                // Finalise this line
+                currentLine.TotalWidth = calcPosBurstParams.x;
+                mattishCaseLineInfos[lineInfoCount++] = currentLine;
+
+                if(m_characterCount == 0)
+                {
+                    ClearMesh(true);
+                    TMPro_EventManager.ON_TEXT_CHANGED(this);
+                    m_IsAutoSizePointSizeSet = true;
+                    return;
+                }
+
+                // TODO: Tidy this up, it's a branchy mess
+                {
+                    int materialCount = m_textInfo.materialCount = (int)m_materialReferenceIndexLookup.Length();
+
+                    if(materialCount > m_textInfo.meshInfo.Length)
+                    {
+                        TMP_TextInfo.Resize(ref m_textInfo.meshInfo, materialCount, false);
+                    }
+
+                    if(materialCount > m_subTextObjects.Length)
+                    {
+                        TMP_TextInfo.Resize(ref m_subTextObjects, Mathf.NextPowerOfTwo(materialCount + 1));
+                    }
+
+                    for(int i = 0; i < materialCount; i++)
+                    {
+                        if(i > 0)
+                        {
+                            if(m_subTextObjects[i] == null)
+                            {
+                                m_subTextObjects[i] = TMP_SubMesh.AddSubTextObject(this, m_materialReferences[i]);
+
+                                // Not sure this is necessary
+                                m_textInfo.meshInfo[i].vertices = null;
+                            }
+
+                            // Check if the material has changed.
+                            if(m_subTextObjects[i].sharedMaterial == null || m_subTextObjects[i].sharedMaterial.GetInstanceID() != m_materialReferences[i].material.GetInstanceID())
+                            {
+                                m_subTextObjects[i].sharedMaterial = m_materialReferences[i].material;
+                                m_subTextObjects[i].fontAsset = m_materialReferences[i].fontAsset;
+                                m_subTextObjects[i].spriteAsset = m_materialReferences[i].spriteAsset;
+                            }
+
+                            // Check if we need to use a Fallback Material
+                            if(m_materialReferences[i].isFallbackMaterial)
+                            {
+                                m_subTextObjects[i].fallbackMaterial = m_materialReferences[i].material;
+                                m_subTextObjects[i].fallbackSourceMaterial = m_materialReferences[i].fallbackMaterial;
+                            }
+                        }
+
+                        int referenceCount = m_materialReferences[i].referenceCount;
+
+                        if(m_textInfo.meshInfo[i].vertices == null || m_textInfo.meshInfo[i].vertices.Length < referenceCount * 4)
+                        {
+                            if(m_textInfo.meshInfo[i].vertices == null)
+                            {
+                                if(i == 0)
+                                {
+                                    m_textInfo.meshInfo[i] = new TMP_MeshInfo(m_mesh, referenceCount + 1);
+                                }
+                                else
+                                {
+                                    m_textInfo.meshInfo[i] = new TMP_MeshInfo(m_subTextObjects[i].mesh, referenceCount + 1);
+                                }
+                            }
+                            else
+                            {
+                                m_textInfo.meshInfo[i].ResizeMeshInfo(referenceCount > 1024 ? referenceCount + 256 : Mathf.NextPowerOfTwo(referenceCount + 1));
+                            }
+                        }
+                        else if(m_VertexBufferAutoSizeReduction && referenceCount > 0 && m_textInfo.meshInfo[i].vertices.Length / 4 - referenceCount > 256)
+                        {
+                            m_textInfo.meshInfo[i].ResizeMeshInfo(referenceCount > 1024 ? referenceCount + 256 : Mathf.NextPowerOfTwo(referenceCount + 1));
+                        }
+
+                        m_textInfo.meshInfo[i].material = m_materialReferences[i].material;
+                    }
+
+                    for(int i = materialCount; i < m_subTextObjects.Length && m_subTextObjects[i] != null; i++)
+                    {
+                        if(i < m_textInfo.meshInfo.Length)
+                        {
+                            m_textInfo.meshInfo[i].ClearUnusedVertices(0, true);
+                        }
+                    }
+
+                    for(int i = 0; i < materialIndexToCharCount.Length && i < m_textInfo.meshInfo.Length; i++)
+                    {
+                        if(materialIndexToCharCount[i] > 0)
+                        {
+                            int targetVertexCount = materialIndexToCharCount[i] * 4;
+                            if(targetVertexCount >= m_textInfo.meshInfo[i].vertices.Length)
+                            {
+                                m_textInfo.meshInfo[i].ResizeMeshInfo(Mathf.NextPowerOfTwo((targetVertexCount + 4) / 4));
+                            }
+                        }
+                    }
+                }
+                
+                // The default positions of character lines places the first character in each line in the middle of the `m_rectTransform.rect`
+                // The origin position of characters is the bottom left corner at ascent y=0
+                Rect rect = m_rectTransform.rect;
+                switch(m_lineJustification)
+                {
+                    case HorizontalAlignmentOptions.Left:
+                        for(var i = 0; i < lineInfoCount; i++)
+                        {
+                            MattishCaseLineInfo mattishCaseLineInfo = mattishCaseLineInfos[i];
+                            mattishCaseLineInfo.CalculatedAlignmentJustificationOffset.x = rect.xMin;
+                            mattishCaseLineInfos[i] = mattishCaseLineInfo;
+                        }
+                        break;
+                    case HorizontalAlignmentOptions.Center:
+                        // Center alignment depends on the total length of each line to center based on content and the size of the text rect
+                        for(var i = 0; i < lineInfoCount; i++)
+                        {
+                            MattishCaseLineInfo mattishCaseLineInfo = mattishCaseLineInfos[i];
+                            mattishCaseLineInfo.CalculatedAlignmentJustificationOffset.x = -mattishCaseLineInfo.TotalWidth * 0.5f;
+                            mattishCaseLineInfos[i] = mattishCaseLineInfo;
+                        }
+                        break;
+                    case HorizontalAlignmentOptions.Right:
+                        // Right alignment depends on the total length of each line, and may require negative offset if the line overflows
+                        for(var i = 0; i < lineInfoCount; i++)
+                        {
+                            MattishCaseLineInfo mattishCaseLineInfo = mattishCaseLineInfos[i];
+                            mattishCaseLineInfo.CalculatedAlignmentJustificationOffset.x = rect.xMax - mattishCaseLineInfo.TotalWidth;
+                            mattishCaseLineInfos[i] = mattishCaseLineInfo;
+                        }
+                        break;
+                    case HorizontalAlignmentOptions.Justified:
+                    case HorizontalAlignmentOptions.Flush:
+                    case HorizontalAlignmentOptions.Geometry:
                     default:
-                    // ¯\_(ツ)_/¯
-                    break;
-            }
-
-            // UV Mapping
-            TMP_CharacterInfo[] characterInfos = m_textInfo.characterInfo;
-            float lossyScale = m_previousLossyScaleY = this.transform.lossyScale.y;
-            
-            for(int i = 0; i < m_characterCount; i++)
-            {
-                bool isCharacterVisible = characterInfos[i].isVisible;
-                characterInfos[i].vertex_BL.uv2.x = 0; //+ m_uvOffset.x;
-                characterInfos[i].vertex_TL.uv2.x = 0; //+ m_uvOffset.x;
-                characterInfos[i].vertex_TR.uv2.x = 1; //+ m_uvOffset.x;
-                characterInfos[i].vertex_BR.uv2.x = 1; //+ m_uvOffset.x;
-                characterInfos[i].vertex_BL.uv2.y = 0; // + m_uvOffset.y;
-                characterInfos[i].vertex_TL.uv2.y = 1; // + m_uvOffset.y;
-                characterInfos[i].vertex_TR.uv2.y = 1; // + m_uvOffset.y;
-                characterInfos[i].vertex_BR.uv2.y = 0; // + m_uvOffset.y;
-                
-                float xScale = characterInfos[i].scale * Mathf.Abs(lossyScale) * (1 - m_charWidthAdjDelta);
-                
-                // Set SDF Scale
-                characterInfos[i].vertex_BL.uv.w = xScale;
-                characterInfos[i].vertex_TL.uv.w = xScale;
-                characterInfos[i].vertex_TR.uv.w = xScale;
-                characterInfos[i].vertex_BR.uv.w = xScale;
-
-                if(isCharacterVisible)
-                {
-                    NormalCaseLineInfo lineInfo = normalCaseLineInfos[characterInfos[i].lineNumber];
-                    Vector3 offset = new(lineInfo.CalculatedAlignmentJustificationOffset.x, -(lineInfo.LineYOffset + lineInfo.CalculatedAlignmentJustificationOffset.y), 0);
-                    
-                    characterInfos[i].vertex_BL.position += offset;
-                    characterInfos[i].vertex_TL.position += offset;
-                    characterInfos[i].vertex_TR.position += offset;
-                    characterInfos[i].vertex_BR.position += offset;
-                    FillCharacterVertexBuffers2(ref characterInfos[i], ref m_textInfo.meshInfo[characterInfos[i].materialReferenceIndex]);
+                        // ¯\_(ツ)_/¯
+                        break;
                 }
-            }
-            
-            k_Matt2Marker.End();
 
-            k_Matt3Marker.Begin();
-            if(m_renderMode == TextRenderFlags.Render && IsActive())
-            {
-                OnPreRenderText?.Invoke(m_textInfo);
-
-                if(m_geometrySortingOrder != VertexSortingOrder.Normal)
+                // We always have one line
+                
+                switch(m_VerticalAlignment)
                 {
-                    m_textInfo.meshInfo[0].SortGeometry(VertexSortingOrder.Reverse);
+                    case VerticalAlignmentOptions.Top:
+                        // Shift down from first line BL, then shift up based on rect height
+                        for(var i = 0; i < lineInfoCount; i++)
+                        {
+                            MattishCaseLineInfo mattishCaseLineInfo = mattishCaseLineInfos[i];
+                            mattishCaseLineInfo.CalculatedAlignmentJustificationOffset.y = (elementAscentLine - rect.yMax);
+                            mattishCaseLineInfos[i] = mattishCaseLineInfo;
+                        }
+                        break;
+                    case VerticalAlignmentOptions.Middle:
+                        // We always have one line, even if we have zero characters
+                        // The first line initial position is at BL...
+                        float totalHeightOfAllLines = ((lineInfoCount * -lineHeight) * 0.5f) + elementAscentLine;
+                        for(var i = 0; i < lineInfoCount; i++)
+                        {
+                            MattishCaseLineInfo mattishCaseLineInfo = mattishCaseLineInfos[i];
+                            mattishCaseLineInfo.CalculatedAlignmentJustificationOffset.y = (totalHeightOfAllLines);
+                            mattishCaseLineInfos[i] = mattishCaseLineInfo;
+                        }
+
+                        break;
+                    case VerticalAlignmentOptions.Bottom:
+                        // Shift down from last line BL
+
+                        MattishCaseLineInfo lastLineInfo = mattishCaseLineInfos[lineInfoCount - 1];
+                        
+                        for(var i = 0; i < lineInfoCount; i++)
+                        {
+                            MattishCaseLineInfo mattishCaseLineInfo = mattishCaseLineInfos[i];
+                            mattishCaseLineInfo.CalculatedAlignmentJustificationOffset.y = -rect.yMin - lastLineInfo.LineYOffset + elementDescentLine;
+                            mattishCaseLineInfos[i] = mattishCaseLineInfo;
+                        }
+                        break;
+                    case VerticalAlignmentOptions.Baseline:
+                    case VerticalAlignmentOptions.Capline:
+                    case VerticalAlignmentOptions.Geometry:
+                        default:
+                        // ¯\_(ツ)_/¯
+                        break;
                 }
                 
-                m_mesh.MarkDynamic();
-                m_mesh.vertices = m_textInfo.meshInfo[0].vertices;
-                m_mesh.SetUVs(0, m_textInfo.meshInfo[0].uvs0);
-                m_mesh.uv2 = m_textInfo.meshInfo[0].uvs2;
-                m_mesh.colors32 = m_textInfo.meshInfo[0].colors32;
-
-                m_mesh.RecalculateBounds();
-                
-                for (int i = 1; i < m_textInfo.materialCount; i++)
+                // If we are all the same material, we can blit much faster!
+                // This is likely going to be the case for roman alphabets and numbers
+                if(m_currentMaterialIndex == 0)
                 {
-                    m_textInfo.meshInfo[i].ClearUnusedVertices();
-
-                    if(m_subTextObjects[i] == null)
+                    fixed(MattishCaseLineInfo* lines = mattishCaseLineInfos)
                     {
-                        continue;
+                        TextMeshProBurst.BurstCompiled_OffsetQuadPositionFull(in verts,in lines, lineInfoCount);
                     }
+                }
+                else
+                {
+                    //TODO: Handle cases of multiple matterials properly
+                    
+                    // for(int i = 0; i < m_characterCount; i++)
+                    // {
+                    //     int bufferIndex = i * 4;
+                    //
+                    //     characterProgress = ref CalculatedCharacterDetails[i];
+                    //
+                    //     MattishCaseLineInfo lineInfo = mattishCaseLineInfos[characterProgress.CalculatedLineNumber];
+                    //     Vector3 offset = new(lineInfo.CalculatedAlignmentJustificationOffset.x, -(lineInfo.LineYOffset + lineInfo.CalculatedAlignmentJustificationOffset.y), 0);
+                    //
+                    //     ref var meshInfo = ref m_textInfo.meshInfo[characterProgress.MaterialReferenceIndex];
+                    //
+                    //     int targetIndex = meshInfo.vertexCount;
+                    //
+                    //     meshInfo.vertices[targetIndex] = vertices[bufferIndex] + offset;
+                    //     meshInfo.vertices[targetIndex + 1] = vertices[bufferIndex + 1] + offset;
+                    //     meshInfo.vertices[targetIndex + 2] = vertices[bufferIndex + 2] + offset;
+                    //     meshInfo.vertices[targetIndex + 3] = vertices[bufferIndex + 3] + offset;
+                    //
+                    //     meshInfo.colors32[targetIndex] = colors[bufferIndex];
+                    //     meshInfo.colors32[targetIndex + 1] = colors[bufferIndex + 1];
+                    //     meshInfo.colors32[targetIndex + 2] = colors[bufferIndex + 2];
+                    //     meshInfo.colors32[targetIndex + 3] = colors[bufferIndex + 3];
+                    //
+                    //     meshInfo.uvs0[targetIndex] = uvs[bufferIndex];
+                    //     meshInfo.uvs0[targetIndex + 1] = uvs[bufferIndex + 1];
+                    //     meshInfo.uvs0[targetIndex + 2] = uvs[bufferIndex + 2];
+                    //     meshInfo.uvs0[targetIndex + 3] = uvs[bufferIndex + 3];
+                    //
+                    //     meshInfo.vertexCount += 4;
+                    // }
+                }
+                
+                if(m_renderMode == TextRenderFlags.Render && IsActive())
+                {
+                    OnPreRenderText?.Invoke(m_textInfo);
 
                     if(m_geometrySortingOrder != VertexSortingOrder.Normal)
                     {
-                        m_textInfo.meshInfo[i].SortGeometry(VertexSortingOrder.Reverse);
+                        m_textInfo.meshInfo[0].SortGeometry(VertexSortingOrder.Reverse);
                     }
 
-                    m_subTextObjects[i].mesh.vertices = m_textInfo.meshInfo[i].vertices;
-                    m_subTextObjects[i].mesh.SetUVs(0, m_textInfo.meshInfo[i].uvs0);
-                    m_subTextObjects[i].mesh.uv2 = m_textInfo.meshInfo[i].uvs2;
-                    m_subTextObjects[i].mesh.colors32 = m_textInfo.meshInfo[i].colors32;
-                    m_subTextObjects[i].mesh.RecalculateBounds();
+                    // Degenerate the remaining vertex
+                    int vCount = m_characterCount * 4;
+                    long bytesLength = (m_mesh.vertexCount - vCount) * sizeof(TMP_MeshVertex);
+                    UnsafeUtility.MemClear(&verts[vCount], bytesLength);
+
+                    UpdateMeshInfo2(m_mesh, vertsBuffer);
+
+                    for (int i = 1; i < m_textInfo.materialCount; i++)
+                    {
+                        m_textInfo.meshInfo[i].ClearUnusedVertices();
+
+                        if(m_subTextObjects[i] == null)
+                        {
+                            continue;
+                        }
+
+                        if(m_geometrySortingOrder != VertexSortingOrder.Normal)
+                        {
+                            m_textInfo.meshInfo[i].SortGeometry(VertexSortingOrder.Reverse);
+                        }
+
+                        UpdateMeshInfo(m_subTextObjects[i].mesh, ref m_textInfo.meshInfo[i]);
+                    }
                 }
+                    
+                TMPro_EventManager.ON_TEXT_CHANGED(this);
+                m_IsAutoSizePointSizeSet = true;
             }
-                
-            TMPro_EventManager.ON_TEXT_CHANGED(this);
-            m_IsAutoSizePointSizeSet = true;
-            k_Matt3Marker.End();
+        }
+        
+        private static unsafe void UpdateMeshInfo(Mesh instanceMesh, ref TMP_MeshInfo meshInfo)
+        {
+            fixed(Vector3* v = meshInfo.vertices)
+            {
+                int verticesSize = instanceMesh.vertexCount;
+                NativeArray<Vector3> nativeArray = NativeArrayUnsafeUtility.ConvertExistingDataToNativeArray<Vector3>(v, verticesSize, Allocator.None);
+#if ENABLE_UNITY_COLLECTIONS_CHECKS
+                // Unity is cringe and requires safety handles when using native arrays in editor builds. Release builds don't even have the class defined and will cause a build compile failure
+                NativeArrayUnsafeUtility.SetAtomicSafetyHandle(ref nativeArray, AtomicSafetyHandle.GetTempUnsafePtrSliceHandle());
+#endif
+                instanceMesh.SetVertices(nativeArray, 0, verticesSize, MeshUpdateFlags.DontRecalculateBounds);
+            }
+            
+            fixed(Vector4* v = meshInfo.uvs0)
+            {
+                int verticesSize = instanceMesh.vertexCount;
+                NativeArray<Vector4> nativeArray = NativeArrayUnsafeUtility.ConvertExistingDataToNativeArray<Vector4>(v, verticesSize, Allocator.None);
+#if ENABLE_UNITY_COLLECTIONS_CHECKS
+                // Unity is cringe and requires safety handles when using native arrays in editor builds. Release builds don't even have the class defined and will cause a build compile failure
+                NativeArrayUnsafeUtility.SetAtomicSafetyHandle(ref nativeArray, AtomicSafetyHandle.GetTempUnsafePtrSliceHandle());
+#endif
+                instanceMesh.SetUVs(0, nativeArray, 0, verticesSize, MeshUpdateFlags.DontRecalculateBounds);
+            }
+            
+            fixed(Vector2* v = meshInfo.uvs2)
+            {
+                int verticesSize = instanceMesh.vertexCount;
+                NativeArray<Vector2> nativeArray = NativeArrayUnsafeUtility.ConvertExistingDataToNativeArray<Vector2>(v, verticesSize, Allocator.None);
+#if ENABLE_UNITY_COLLECTIONS_CHECKS
+                // Unity is cringe and requires safety handles when using native arrays in editor builds. Release builds don't even have the class defined and will cause a build compile failure
+                NativeArrayUnsafeUtility.SetAtomicSafetyHandle(ref nativeArray, AtomicSafetyHandle.GetTempUnsafePtrSliceHandle());
+#endif
+                instanceMesh.SetUVs(1, nativeArray, 0, verticesSize, MeshUpdateFlags.DontRecalculateBounds);
+            }
+            
+            fixed(Color32* v = meshInfo.colors32)
+            {
+                int verticesSize = instanceMesh.vertexCount;
+                NativeArray<Color32> nativeArray = NativeArrayUnsafeUtility.ConvertExistingDataToNativeArray<Color32>(v, verticesSize, Allocator.None);
+#if ENABLE_UNITY_COLLECTIONS_CHECKS
+                // Unity is cringe and requires safety handles when using native arrays in editor builds. Release builds don't even have the class defined and will cause a build compile failure
+                NativeArrayUnsafeUtility.SetAtomicSafetyHandle(ref nativeArray, AtomicSafetyHandle.GetTempUnsafePtrSliceHandle());
+#endif
+                instanceMesh.SetColors(nativeArray, 0, verticesSize, MeshUpdateFlags.DontRecalculateBounds);
+            }
+            instanceMesh.RecalculateBounds();
+        }
+        
+        private static unsafe void UpdateMeshInfo2(Mesh instanceMesh, TMP_MeshVertex[] data)
+        {
+            int verticesSize = instanceMesh.vertexCount;
+            
+            fixed(TMP_MeshVertex* verts = data)
+            {
+                NativeArray<TMP_MeshVertex> nativeArray = NativeArrayUnsafeUtility.ConvertExistingDataToNativeArray<TMP_MeshVertex>(verts, verticesSize, Allocator.None);
+#if ENABLE_UNITY_COLLECTIONS_CHECKS
+                // Unity is cringe and requires safety handles when using native arrays in editor builds. Release builds don't even have the class defined and will cause a build compile failure
+                NativeArrayUnsafeUtility.SetAtomicSafetyHandle(ref nativeArray, AtomicSafetyHandle.GetTempUnsafePtrSliceHandle());
+#endif
+                instanceMesh.SetVertexBufferData(nativeArray, 0, 0, verticesSize, flags: MeshUpdateFlags.DontValidateIndices | MeshUpdateFlags.DontNotifyMeshUsers | MeshUpdateFlags.DontResetBoneBounds);
+            }
         }
 
         /// <summary>
@@ -2576,13 +2792,10 @@ namespace TMPro
                 return;
             }
 
-            bool isNormalCase = m_overflowMode == TextOverflowModes.Overflow && m_ActiveFontFeatures.Contains(OTL_FeatureTag.kern) && !m_isOrthographic && !m_isRichText;
-
-            if(isNormalCase)
+            if(m_isMattishOptimization)
             {
-                k_TempMarker.Begin();
-                DoNormalCaseGenerateTextMesh();
-                k_TempMarker.End();
+                DoMattishCaseGenerateTextMesh(m_TextProcessingArray);
+                k_GenerateTextMarker.End();
                 return;
             }
 
@@ -2820,7 +3033,8 @@ namespace TMPro
                     switch (charCode)
                     {
                         case 0x03:
-                            m_textInfo.characterInfo[m_characterCount].textElement = m_currentFontAsset.characterLookupTable[0x03];
+                            ref TMP_Character lookupCha = ref m_currentFontAsset.characterLookupTable.TryGet(0x03, out bool foundChar);
+                            m_internalCharacterInfo[m_characterCount].textElement = foundChar ? lookupCha : null;
                             m_isTextTruncated = true;
                             break;
                         case 0x2D:
@@ -2903,10 +3117,10 @@ namespace TMPro
                 if (m_textElementType == TMP_TextElementType.Sprite)
                 {
                     // If a sprite is used as a fallback then get a reference to it and set the color to white.
-                    TMP_SpriteCharacter sprite = (TMP_SpriteCharacter)textInfo.characterInfo[m_characterCount].textElement;
-                    m_currentSpriteAsset = sprite.textAsset as TMP_SpriteAsset;
-                    m_spriteIndex = (int)sprite.glyphIndex;
+                    m_currentSpriteAsset = m_textInfo.characterInfo[m_characterCount].textElement.textAsset as TMP_SpriteAsset;
+                    m_spriteIndex = (int)m_textInfo.characterInfo[m_characterCount].textElement.glyphIndex;
 
+                    TMP_SpriteCharacter sprite = m_currentSpriteAsset.spriteCharacterTable[m_spriteIndex];
                     if (sprite == null)
                     {
                         k_CharacterLookupMarker.End();
@@ -3169,7 +3383,7 @@ namespace TMPro
                         monoAdvance = (m_monoSpacing / 4 - (currentGlyphMetrics.width / 2 + currentGlyphMetrics.horizontalBearingX) * currentElementScale) * (1 - m_charWidthAdjDelta);
                     else
                         monoAdvance = (m_monoSpacing / 2 - (currentGlyphMetrics.width / 2 + currentGlyphMetrics.horizontalBearingX) * currentElementScale) * (1 - m_charWidthAdjDelta);
-
+                    
                     m_xAdvance += monoAdvance;
                 }
                 #endregion
@@ -4051,7 +4265,7 @@ namespace TMPro
                         m_textInfo.lineInfo[m_lineNumber].marginLeft = marginLeft;
                         m_textInfo.lineInfo[m_lineNumber].marginRight = marginRight;
                         m_textInfo.spaceCount += 1;
-
+                        
                         if (charCode == 0xA0)
                             m_textInfo.lineInfo[m_lineNumber].controlCharacterCount += 1;
                     }
@@ -4207,7 +4421,7 @@ namespace TMPro
                         monoAdjustment = m_monoSpacing / 2 - monoAdvance;
                     else
                         monoAdjustment = m_monoSpacing - monoAdvance;
-
+                    
                     m_xAdvance += (monoAdjustment + ((m_currentFontAsset.normalSpacingOffset + characterSpacingAdjustment) * currentEmScale) + m_cSpacing) * (1 - m_charWidthAdjDelta);
 
                     if (isWhiteSpace || charCode == 0x200B)
@@ -4706,7 +4920,7 @@ namespace TMPro
                             {
                                 float gap = !m_isRightToLeft ? lineInfo.width - lineInfo.maxAdvance : lineInfo.width + lineInfo.maxAdvance;
                                 int visibleCount = lineInfo.visibleCharacterCount - 1 + lineInfo.controlCharacterCount;
-                                int spaces = lineInfo.spaceCount - lineInfo.controlCharacterCount;
+                                int spaces = lineInfo.visibleSpaceCount - lineInfo.controlCharacterCount;
 
                                 if (isFirstSeperator) { spaces -= 1; visibleCount += 1; }
 

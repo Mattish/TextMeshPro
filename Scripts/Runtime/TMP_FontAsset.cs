@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Collections;
 using UnityEngine;
 using UnityEngine.Serialization;
 using UnityEngine.TextCore;
@@ -184,7 +185,7 @@ namespace TMPro
         /// <summary>
         /// Dictionary used to lookup characters contained in the font asset by their unicode values.
         /// </summary>
-        public Dictionary<uint, TMP_Character> characterLookupTable
+        public SpeedictPointerLess<TMP_Character> characterLookupTable
         {
             get
             {
@@ -195,7 +196,8 @@ namespace TMPro
                 return m_CharacterLookupDictionary;
             }
         }
-        internal Dictionary<uint, TMP_Character> m_CharacterLookupDictionary;
+        internal SpeedictPointerLess<TMP_Character> m_CharacterLookupDictionary;
+        public SpeedictPointerLess<TMP_CacheCalculatedCharacter> m_CachedCalculatedCharacterLookup;
 
 
         /// <summary>
@@ -486,6 +488,7 @@ namespace TMPro
         /// <param name="styleName">The style name of the source font face.</param>
         /// <param name="pointSize">Optional point size.</param>
         /// <returns>An instance of the newly created font asset.</returns>
+        #if UNITY_2020_3_OR_NEWER && !(UNITY_2020_3_1 || UNITY_2020_3_2 || UNITY_2020_3_3 || UNITY_2020_3_4 || UNITY_2020_3_5 || UNITY_2020_3_6 || UNITY_2021_1_1|| UNITY_2021_1_2|| UNITY_2021_1_3|| UNITY_2021_1_4)
         public static TMP_FontAsset CreateFontAsset(string familyName, string styleName, int pointSize = 90)
         {
             if (FontEngine.TryGetSystemFontReference(familyName, styleName, out FontReference fontRef))
@@ -495,6 +498,7 @@ namespace TMPro
 
             return null;
         }
+        #endif
 
         /// <summary>
         /// Creates a new font asset instance from the font file at the given file path.
@@ -749,16 +753,18 @@ namespace TMPro
             AddSynthesizedCharactersAndFaceMetrics();
 
             // Set Cap Line using the capital letter 'X'
-            if (m_FaceInfo.capLine == 0 && m_CharacterLookupDictionary.ContainsKey('X'))
+            ref TMP_Character capitalX = ref m_CharacterLookupDictionary.TryGet('X', out bool gotCapitalX);
+            ref TMP_Character lowerX = ref m_CharacterLookupDictionary.TryGet('x', out bool gotLowerX);
+            if (m_FaceInfo.capLine == 0 && gotCapitalX)
             {
-                uint glyphIndex = m_CharacterLookupDictionary['X'].glyphIndex;
+                uint glyphIndex = capitalX.glyphIndex;
                 m_FaceInfo.capLine = m_GlyphLookupDictionary[glyphIndex].metrics.horizontalBearingY;
             }
 
             // Set Mean Line using the lowercase letter 'x'
-            if (m_FaceInfo.meanLine == 0 && m_CharacterLookupDictionary.ContainsKey('x'))
+            if (m_FaceInfo.meanLine == 0 && gotLowerX)
             {
-                uint glyphIndex = m_CharacterLookupDictionary['x'].glyphIndex;
+                uint glyphIndex = lowerX.glyphIndex;
                 m_FaceInfo.meanLine = m_GlyphLookupDictionary[glyphIndex].metrics.horizontalBearingY;
             }
 
@@ -866,10 +872,16 @@ namespace TMPro
         internal void InitializeCharacterLookupDictionary()
         {
             // Create new instance of the character lookup dictionary or clear the existing one.
-            if (m_CharacterLookupDictionary == null)
-                m_CharacterLookupDictionary = new Dictionary<uint, TMP_Character>();
+            if(m_CharacterLookupDictionary == null)
+            {
+                m_CharacterLookupDictionary = new SpeedictPointerLess<TMP_Character>();
+                m_CachedCalculatedCharacterLookup = new SpeedictPointerLess<TMP_CacheCalculatedCharacter>();
+            }
             else
+            {
                 m_CharacterLookupDictionary.Clear();
+                m_CachedCalculatedCharacterLookup.Clear();
+            }
 
             // Add the characters contained in the character table to the dictionary for faster lookup.
             for (int i = 0; i < m_CharacterTable.Count; i++)
@@ -880,11 +892,13 @@ namespace TMPro
                 uint glyphIndex = character.glyphIndex;
 
                 // Add character along with reference to text asset and glyph
-                if (m_CharacterLookupDictionary.ContainsKey(unicode) == false)
+                if (!m_CharacterLookupDictionary.Contains(unicode))
                 {
                     m_CharacterLookupDictionary.Add(unicode, character);
                     character.textAsset = this;
                     character.glyph = m_GlyphLookupDictionary[glyphIndex];
+                    character.IsWhiteSpace = unicode <= 0xFFFF && char.IsWhiteSpace((char)unicode);
+                    m_CachedCalculatedCharacterLookup.Add(unicode, TMP_CacheCalculatedCharacter.Calcuate(character.glyph));
                 }
             }
 
@@ -1056,7 +1070,7 @@ namespace TMPro
         void AddSynthesizedCharacter(uint unicode, bool isFontFaceLoaded, bool addImmediately = false)
         {
             // Check if unicode is already present in the font asset
-            if (m_CharacterLookupDictionary.ContainsKey(unicode))
+            if (m_CharacterLookupDictionary.Contains(unicode))
                 return;
 
             Glyph glyph;
@@ -1075,8 +1089,11 @@ namespace TMPro
                         ? GlyphLoadFlags.LOAD_NO_BITMAP | GlyphLoadFlags.LOAD_NO_HINTING
                         : GlyphLoadFlags.LOAD_NO_BITMAP;
 
-                    if (FontEngine.TryGetGlyphWithUnicodeValue(unicode, glyphLoadFlags, out glyph))
+                    if(FontEngine.TryGetGlyphWithUnicodeValue(unicode, glyphLoadFlags, out glyph))
+                    {
                         m_CharacterLookupDictionary.Add(unicode, new TMP_Character(unicode, this, glyph));
+                        m_CachedCalculatedCharacterLookup.Add(unicode, TMP_CacheCalculatedCharacter.Calcuate(glyph));
+                    }
 
                     return;
                 }
@@ -1087,6 +1104,7 @@ namespace TMPro
             // Synthesize and add missing glyph and character
             glyph = new Glyph(0, new GlyphMetrics(0, 0, 0, 0, 0), GlyphRect.zero, 1.0f, 0);
             m_CharacterLookupDictionary.Add(unicode, new TMP_Character(unicode, this, glyph));
+            m_CachedCalculatedCharacterLookup.Add(unicode, TMP_CacheCalculatedCharacter.Calcuate(glyph));
         }
 
         //internal HashSet<int> FallbackSearchQueryLookup = new HashSet<int>();
@@ -1094,6 +1112,7 @@ namespace TMPro
         internal void AddCharacterToLookupCache(uint unicode, TMP_Character character)
         {
             m_CharacterLookupDictionary.Add(unicode, character);
+            m_CachedCalculatedCharacterLookup.Add(unicode, TMP_CacheCalculatedCharacter.Calcuate(character.glyph));
 
             // Add font asset to fallback references.
             //FallbackSearchQueryLookup.Add(character.textAsset.instanceID);
@@ -1124,6 +1143,7 @@ namespace TMPro
                 return FontEngineError.Invalid_Face;
             }
 
+           #if UNITY_2020_3_OR_NEWER && !(UNITY_2020_3_1 || UNITY_2020_3_2 || UNITY_2020_3_3 || UNITY_2020_3_4 || UNITY_2020_3_5 || UNITY_2020_3_6 || UNITY_2021_1_1|| UNITY_2021_1_2|| UNITY_2021_1_3|| UNITY_2021_1_4)
             // Font Asset is Dynamic OS
             #if UNITY_EDITOR
             if (SourceFont_EditorRef != null)
@@ -1135,6 +1155,9 @@ namespace TMPro
             #endif
 
             return FontEngine.LoadFontFace(m_FaceInfo.familyName, m_FaceInfo.styleName, m_FaceInfo.pointSize);
+            #else
+            return FontEngineError.Invalid_Face;
+            #endif
         }
 
         /// <summary>
@@ -1187,7 +1210,7 @@ namespace TMPro
             if (characterLookupTable == null)
                 return false;
 
-            return m_CharacterLookupDictionary.ContainsKey((uint)character);
+            return m_CharacterLookupDictionary.Contains((uint)character);
         }
 
         /// <summary>
@@ -1204,7 +1227,7 @@ namespace TMPro
                 return false;
 
             // Check font asset
-            if (m_CharacterLookupDictionary.ContainsKey(character))
+            if (m_CharacterLookupDictionary.Contains(character))
                 return true;
 
             // Check if font asset is dynamic and if so try to add the requested character to it.
@@ -1300,7 +1323,7 @@ namespace TMPro
             }
 
             // Check font asset
-            if (m_CharacterLookupDictionary.ContainsKey(character))
+            if (m_CharacterLookupDictionary.Contains(character))
                 return true;
 
             // Check if fallback is dynamic and if so try to add the requested character to it.
@@ -1353,7 +1376,7 @@ namespace TMPro
 
             for (int i = 0; i < text.Length; i++)
             {
-                if (!m_CharacterLookupDictionary.ContainsKey(text[i]))
+                if (!m_CharacterLookupDictionary.Contains(text[i]))
                     missingCharacters.Add(text[i]);
             }
 
@@ -1387,7 +1410,7 @@ namespace TMPro
                 bool isMissingCharacter = true;
                 uint character = text[i];
 
-                if (m_CharacterLookupDictionary.ContainsKey(character))
+                if (m_CharacterLookupDictionary.Contains(character))
                     continue;
 
                 // Check if fallback is dynamic and if so try to add the requested character to it.
@@ -1490,7 +1513,7 @@ namespace TMPro
 
             for (int i = 0; i < text.Length; i++)
             {
-                if (!m_CharacterLookupDictionary.ContainsKey(text[i]))
+                if (!m_CharacterLookupDictionary.Contains(text[i]))
                     return false;
             }
 
@@ -1539,8 +1562,11 @@ namespace TMPro
         internal uint GetGlyphIndex(uint unicode)
         {
             // Check if glyph already exists in font asset.
-            if (m_CharacterLookupDictionary.ContainsKey(unicode))
-                return m_CharacterLookupDictionary[unicode].glyphIndex;
+            ref TMP_Character c = ref m_CharacterLookupDictionary.TryGet(unicode, out bool contains);
+            if(contains)
+            {
+                return c.glyphIndex;
+            }
 
             // Load font face.
             return LoadFontFace() == FontEngineError.Success ? FontEngine.GetGlyphIndex(unicode) : 0;
@@ -1759,7 +1785,7 @@ namespace TMPro
                 uint unicode = unicodes[i];
 
                 // Check if character is already contained in the character table.
-                if (m_CharacterLookupDictionary.ContainsKey(unicode))
+                if (m_CharacterLookupDictionary!.Contains(unicode))
                     continue;
 
                 // Get the index of the glyph for this Unicode value.
@@ -1804,6 +1830,7 @@ namespace TMPro
 
                     m_CharacterTable.Add(character);
                     m_CharacterLookupDictionary.Add(unicode, character);
+                    m_CachedCalculatedCharacterLookup.Add(unicode, TMP_CacheCalculatedCharacter.Calcuate(character.glyph));
                     continue;
                 }
 
@@ -1876,6 +1903,7 @@ namespace TMPro
 
                 m_CharacterTable.Add(character);
                 m_CharacterLookupDictionary.Add(character.unicode, character);
+                m_CachedCalculatedCharacterLookup.Add(character.unicode, TMP_CacheCalculatedCharacter.Calcuate(character.glyph));
 
                 // Remove character from list to add
                 m_CharactersToAdd.RemoveAt(i);
@@ -1984,7 +2012,7 @@ namespace TMPro
                 uint unicode = characters[i];
 
                 // Check if character is already contained in the character table.
-                if (m_CharacterLookupDictionary.ContainsKey(unicode))
+                if (m_CharacterLookupDictionary!.Contains(unicode))
                     continue;
 
                 // Get the index of the glyph for this unicode value.
@@ -2029,6 +2057,7 @@ namespace TMPro
 
                     m_CharacterTable.Add(character);
                     m_CharacterLookupDictionary.Add(unicode, character);
+                    m_CachedCalculatedCharacterLookup.Add(unicode, TMP_CacheCalculatedCharacter.Calcuate(character.glyph));
                     continue;
                 }
 
@@ -2100,6 +2129,7 @@ namespace TMPro
 
                 m_CharacterTable.Add(character);
                 m_CharacterLookupDictionary.Add(character.unicode, character);
+                m_CachedCalculatedCharacterLookup.Add(character.unicode, TMP_CacheCalculatedCharacter.Calcuate(character.glyph));
 
                 // Remove character from list to add
                 m_CharactersToAdd.RemoveAt(i);
@@ -2488,6 +2518,7 @@ namespace TMPro
                 character = new TMP_Character(unicode, this, m_GlyphLookupDictionary[glyphIndex]);
                 m_CharacterTable.Add(character);
                 m_CharacterLookupDictionary.Add(unicode, character);
+                m_CachedCalculatedCharacterLookup.Add(unicode, TMP_CacheCalculatedCharacter.Calcuate(character.glyph));
 
                 #if UNITY_EDITOR
                 // Makes the changes to the font asset persistent.
@@ -2565,6 +2596,7 @@ namespace TMPro
                 character = new TMP_Character(unicode, this, glyph);
                 m_CharacterTable.Add(character);
                 m_CharacterLookupDictionary.Add(unicode, character);
+                m_CachedCalculatedCharacterLookup.Add(unicode, TMP_CacheCalculatedCharacter.Calcuate(glyph));
 
                 m_GlyphIndexList.Add(glyphIndex);
                 m_GlyphIndexListNewlyAdded.Add(glyphIndex);
@@ -2607,6 +2639,7 @@ namespace TMPro
                     character = new TMP_Character(unicode, this, glyph);
                     m_CharacterTable.Add(character);
                     m_CharacterLookupDictionary.Add(unicode, character);
+                    m_CachedCalculatedCharacterLookup.Add(unicode, TMP_CacheCalculatedCharacter.Calcuate(glyph));
 
                     m_GlyphIndexList.Add(glyphIndex);
                     m_GlyphIndexListNewlyAdded.Add(glyphIndex);
@@ -2689,7 +2722,7 @@ namespace TMPro
                 character = new TMP_Character(unicode, this, m_GlyphLookupDictionary[glyphIndex]);
                 m_CharacterTable.Add(character);
                 m_CharacterLookupDictionary.Add(unicode, character);
-
+                m_CachedCalculatedCharacterLookup.Add(unicode, TMP_CacheCalculatedCharacter.Calcuate(character.glyph));
                 #if UNITY_EDITOR
                 // Makes the changes to the font asset persistent.
                 RegisterResourceForUpdate?.Invoke(this);
@@ -2715,6 +2748,7 @@ namespace TMPro
                 character = new TMP_Character(unicode, this, glyph);
                 m_CharacterTable.Add(character);
                 m_CharacterLookupDictionary.Add(unicode, character);
+                m_CachedCalculatedCharacterLookup.Add(unicode, TMP_CacheCalculatedCharacter.Calcuate(glyph));
 
                 m_GlyphIndexList.Add(glyphIndex);
                 m_GlyphIndexListNewlyAdded.Add(glyphIndex);
@@ -2846,6 +2880,7 @@ namespace TMPro
 
                 m_CharacterTable.Add(character);
                 m_CharacterLookupDictionary.Add(character.unicode, character);
+                m_CachedCalculatedCharacterLookup.Add(character.unicode, TMP_CacheCalculatedCharacter.Calcuate(glyph));
 
                 // Remove character
                 m_CharactersToAdd.RemoveAt(i);
@@ -3726,16 +3761,20 @@ namespace TMPro
                 KerningPair pair = m_KerningTable.kerningPairs[i];
 
                 uint firstGlyphIndex = 0;
-                TMP_Character firstCharacter;
+                ref TMP_Character firstCharacter = ref m_CharacterLookupDictionary.TryGet(pair.firstGlyph, out bool gotFirstCharacter);
+                ref TMP_Character secondCharacter = ref m_CharacterLookupDictionary.TryGet(pair.secondGlyph, out bool gotSecondCharacter);
 
-                if (m_CharacterLookupDictionary.TryGetValue(pair.firstGlyph, out firstCharacter))
+                if(gotFirstCharacter)
+                {
                     firstGlyphIndex = firstCharacter.glyphIndex;
+                }
 
                 uint secondGlyphIndex = 0;
-                TMP_Character secondCharacter;
 
-                if (m_CharacterLookupDictionary.TryGetValue(pair.secondGlyph, out secondCharacter))
+                if(gotSecondCharacter)
+                {
                     secondGlyphIndex = secondCharacter.glyphIndex;
+                }
 
                 GlyphAdjustmentRecord firstAdjustmentRecord = new GlyphAdjustmentRecord(firstGlyphIndex, new GlyphValueRecord(pair.firstGlyphAdjustments.xPlacement, pair.firstGlyphAdjustments.yPlacement, pair.firstGlyphAdjustments.xAdvance, pair.firstGlyphAdjustments.yAdvance));
                 GlyphAdjustmentRecord secondAdjustmentRecord = new GlyphAdjustmentRecord(secondGlyphIndex, new GlyphValueRecord(pair.secondGlyphAdjustments.xPlacement, pair.secondGlyphAdjustments.yPlacement, pair.secondGlyphAdjustments.xAdvance, pair.secondGlyphAdjustments.yAdvance));

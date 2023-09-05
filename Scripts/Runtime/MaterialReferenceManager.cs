@@ -1,4 +1,5 @@
 ﻿using System.Collections.Generic;
+using Collections;
 using UnityEngine;
 
 
@@ -558,18 +559,20 @@ namespace TMPro
         /// <param name="materialReferences"></param>
         /// <param name="materialReferenceIndexLookup"></param>
         /// <returns></returns>
-        public static int AddMaterialReference(Material material, TMP_FontAsset fontAsset, ref MaterialReference[] materialReferences, Dictionary<int, int> materialReferenceIndexLookup)
+        public static int AddMaterialReference(Material material, TMP_FontAsset fontAsset, ref MaterialReference[] materialReferences, SpeedictPointerLess<int> materialReferenceIndexLookup)
         {
             int materialID = material.GetInstanceID();
-            int index;
 
-            if (materialReferenceIndexLookup.TryGetValue(materialID, out index))
+            int index = materialReferenceIndexLookup.TryGet(materialID, out bool found);
+            if(found)
+            {
                 return index;
+            }
 
-            index = materialReferenceIndexLookup.Count;
+            index = (int)materialReferenceIndexLookup.Length();
 
             // Add new reference index
-            materialReferenceIndexLookup[materialID] = index;
+            materialReferenceIndexLookup.Add(materialID, index);
 
             if (index >= materialReferences.Length)
                 System.Array.Resize(ref materialReferences, Mathf.NextPowerOfTwo(index + 1));
@@ -593,18 +596,20 @@ namespace TMPro
         /// <param name="materialReferences"></param>
         /// <param name="materialReferenceIndexLookup"></param>
         /// <returns></returns>
-        public static int AddMaterialReference(Material material, TMP_SpriteAsset spriteAsset, ref MaterialReference[] materialReferences, Dictionary<int, int> materialReferenceIndexLookup)
+        public static int AddMaterialReference(Material material, TMP_SpriteAsset spriteAsset, ref MaterialReference[] materialReferences, SpeedictPointerLess<int> materialReferenceIndexLookup)
         {
             int materialID = material.GetInstanceID();
-            int index;
 
-            if (materialReferenceIndexLookup.TryGetValue(materialID, out index))
+            int index = materialReferenceIndexLookup.TryGet(materialID, out bool found);
+            if(found)
+            {
                 return index;
+            }
 
-            index = materialReferenceIndexLookup.Count;
+            index = (int)materialReferenceIndexLookup.Length();
 
             // Add new reference index
-            materialReferenceIndexLookup[materialID] = index;
+            materialReferenceIndexLookup.Add(materialID, index);
 
             if (index >= materialReferences.Length)
                 System.Array.Resize(ref materialReferences, Mathf.NextPowerOfTwo(index + 1));

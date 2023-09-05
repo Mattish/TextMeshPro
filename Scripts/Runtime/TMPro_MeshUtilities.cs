@@ -435,6 +435,7 @@ namespace TMPro
         public bool isNonBreakingSpace;
 
         public Quaternion fxRotation;
+        public bool hasFxRotation;
         public Vector3 fxScale;
     }
 

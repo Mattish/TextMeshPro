@@ -32,6 +32,7 @@ namespace TMPro
             this.glyph = glyph;
             this.glyphIndex = glyph.index;
             this.scale = 1.0f;
+            this.IsWhiteSpace = unicode <= 0xFFFF && char.IsWhiteSpace((char)unicode);
         }
 
         /// <summary>
@@ -49,6 +50,7 @@ namespace TMPro
             this.glyph = glyph;
             this.glyphIndex = glyph.index;
             this.scale = 1.0f;
+            this.IsWhiteSpace = unicode <= 0xFFFF && char.IsWhiteSpace((char)unicode);
         }
 
         /// <summary>
@@ -65,6 +67,7 @@ namespace TMPro
             this.glyph = null;
             this.glyphIndex = glyphIndex;
             this.scale = 1.0f;
+            this.IsWhiteSpace = unicode <= 0xFFFF && char.IsWhiteSpace((char)unicode);
         }
     }
 }

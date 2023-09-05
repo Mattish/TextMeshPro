@@ -21,6 +21,21 @@ namespace TMPro.EditorUtilities
             m_MaskableProp = serializedObject.FindProperty("m_Maskable");
         }
 
+        protected override void DrawExtraSettingsMattish()
+        {
+            Rect rect = EditorGUILayout.GetControlRect(false, 24);
+
+            if (GUI.Button(rect, new GUIContent("<b>Extra Settings</b>"), TMP_UIStyleManager.sectionHeader))
+                Foldout.extraSettings = !Foldout.extraSettings;
+
+            GUI.Label(rect, (Foldout.extraSettings ? "" : k_UiStateLabel[1]), TMP_UIStyleManager.rightLabel);
+
+            if (Foldout.extraSettings)
+            {
+                
+            }
+        }
+        
         protected override void DrawExtraSettings()
         {
             Rect rect = EditorGUILayout.GetControlRect(false, 24);

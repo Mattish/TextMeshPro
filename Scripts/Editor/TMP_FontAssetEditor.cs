@@ -5,7 +5,10 @@ using System.Collections.Generic;
 using JetBrains.Annotations;
 using UnityEngine.TextCore;
 using UnityEngine.TextCore.LowLevel;
-using UnityEditor.TextCore.LowLevel;
+
+#if UNITY_2018_4_OR_NEWER && !UNITY_2018_4_0 && !UNITY_2018_4_1 && !UNITY_2018_4_2 && !UNITY_2018_4_3 && !UNITY_2018_4_4
+    using UnityEditor.TextCore.LowLevel;
+#endif
 
 
 namespace TMPro.EditorUtilities
@@ -244,6 +247,10 @@ namespace TMPro.EditorUtilities
         private SerializedProperty m_FirstCharacterUnicode_prop;
         private SerializedProperty m_SecondCharacterUnicode_prop;
 
+
+        private string m_SecondCharacter;
+        private uint m_SecondGlyphIndex;
+
         private TMP_FontAsset m_fontAsset;
 
         private Material[] m_materialPresets;
@@ -312,12 +319,11 @@ namespace TMPro.EditorUtilities
             // Create serialized object to allow us to use a serialized property of an empty kerning pair.
             m_SerializedPropertyHolder = CreateInstance<TMP_SerializedPropertyHolder>();
             m_SerializedPropertyHolder.fontAsset = m_fontAsset;
-            using (SerializedObject internalSerializedObject = new SerializedObject(m_SerializedPropertyHolder))
-            {
-                m_FirstCharacterUnicode_prop = internalSerializedObject.FindProperty("firstCharacter");
-                m_SecondCharacterUnicode_prop = internalSerializedObject.FindProperty("secondCharacter");
-                m_EmptyGlyphPairAdjustmentRecord_prop = internalSerializedObject.FindProperty("glyphPairAdjustmentRecord");
-            }
+            SerializedObject internalSerializedObject = new SerializedObject(m_SerializedPropertyHolder);
+            m_FirstCharacterUnicode_prop = internalSerializedObject.FindProperty("firstCharacter");
+            m_SecondCharacterUnicode_prop = internalSerializedObject.FindProperty("secondCharacter");
+            m_EmptyGlyphPairAdjustmentRecord_prop = internalSerializedObject.FindProperty("glyphPairAdjustmentRecord");
+
             m_materialPresets = TMP_EditorUtility.FindMaterialReferences(m_fontAsset);
 
             m_GlyphSearchList = new List<int>();
@@ -1546,12 +1552,15 @@ namespace TMPro.EditorUtilities
                     TMP_Character character;
 
                     uint firstCharacter = m_SerializedPropertyHolder.firstCharacter;
-                    if (!m_fontAsset.characterLookupTable.ContainsKey(firstCharacter))
+                    if(!m_fontAsset.characterLookupTable.Contains(firstCharacter))
+                    {
                         m_fontAsset.TryAddCharacterInternal(firstCharacter, out character);
+                    }
 
                     uint secondCharacter = m_SerializedPropertyHolder.secondCharacter;
-                    if (!m_fontAsset.characterLookupTable.ContainsKey(secondCharacter))
+                    if (!m_fontAsset.characterLookupTable.Contains(secondCharacter)){
                         m_fontAsset.TryAddCharacterInternal(secondCharacter, out character);
+                    }
 
                     // Sort Kerning Pairs & Reload Font Asset if new kerning pair was added.
                     if (errorCode != -1)
@@ -2261,7 +2270,7 @@ namespace TMPro.EditorUtilities
         bool AddNewCharacter(int srcIndex, int dstGlyphID)
         {
             // Make sure Destination Glyph ID doesn't already contain a Glyph
-            if (m_fontAsset.characterLookupTable.ContainsKey((uint)dstGlyphID))
+            if (m_fontAsset.characterLookupTable.Contains((uint)dstGlyphID))
                 return false;
 
             // Add new element to glyph list.
@@ -2639,16 +2648,20 @@ namespace TMPro.EditorUtilities
 
             // Lookup glyph index of potential characters contained in the search pattern.
             uint firstGlyphIndex = 0;
-            TMP_Character firstCharacterSearch;
+            ref TMP_Character firstCharacterSearch = ref m_fontAsset.characterLookupTable.TryGet(searchPattern[0], out bool foundFirst);
+            ref TMP_Character secondCharacterSearch = ref m_fontAsset.characterLookupTable.TryGet(searchPattern[1], out bool foundSecond);
 
-            if (searchPattern.Length > 0 && m_fontAsset.characterLookupTable.TryGetValue(searchPattern[0], out firstCharacterSearch))
+            if(searchPattern.Length > 0 && foundFirst)
+            {
                 firstGlyphIndex = firstCharacterSearch.glyphIndex;
+            }
 
             uint secondGlyphIndex = 0;
-            TMP_Character secondCharacterSearch;
 
-            if (searchPattern.Length > 1 && m_fontAsset.characterLookupTable.TryGetValue(searchPattern[1], out secondCharacterSearch))
+            if(searchPattern.Length > 1 && foundSecond)
+            {
                 secondGlyphIndex = secondCharacterSearch.glyphIndex;
+            }
 
             int arraySize = m_MarkToBaseAdjustmentRecords_prop.arraySize;
 
@@ -2678,16 +2691,20 @@ namespace TMPro.EditorUtilities
 
             // Lookup glyph index of potential characters contained in the search pattern.
             uint firstGlyphIndex = 0;
-            TMP_Character firstCharacterSearch;
+            ref TMP_Character firstCharacterSearch = ref m_fontAsset.characterLookupTable.TryGet(searchPattern[0], out bool foundFirst);
+            ref TMP_Character secondCharacterSearch = ref m_fontAsset.characterLookupTable.TryGet(searchPattern[1], out bool foundSecond);
 
-            if (searchPattern.Length > 0 && m_fontAsset.characterLookupTable.TryGetValue(searchPattern[0], out firstCharacterSearch))
+            if(searchPattern.Length > 0 && foundFirst)
+            {
                 firstGlyphIndex = firstCharacterSearch.glyphIndex;
+            }
 
             uint secondGlyphIndex = 0;
-            TMP_Character secondCharacterSearch;
 
-            if (searchPattern.Length > 1 && m_fontAsset.characterLookupTable.TryGetValue(searchPattern[1], out secondCharacterSearch))
+            if(searchPattern.Length > 1 && foundSecond)
+            {
                 secondGlyphIndex = secondCharacterSearch.glyphIndex;
+            }
 
             int arraySize = m_GlyphPairAdjustmentRecords_prop.arraySize;
 
@@ -2720,16 +2737,20 @@ namespace TMPro.EditorUtilities
 
             // Lookup glyph index of potential characters contained in the search pattern.
             uint firstGlyphIndex = 0;
-            TMP_Character firstCharacterSearch;
+            ref TMP_Character firstCharacterSearch = ref m_fontAsset.characterLookupTable.TryGet(searchPattern[0], out bool foundFirst);
+            ref TMP_Character secondCharacterSearch = ref m_fontAsset.characterLookupTable.TryGet(searchPattern[1], out bool foundSecond);
 
-            if (searchPattern.Length > 0 && m_fontAsset.characterLookupTable.TryGetValue(searchPattern[0], out firstCharacterSearch))
+            if(searchPattern.Length > 0 && foundFirst)
+            {
                 firstGlyphIndex = firstCharacterSearch.glyphIndex;
+            }
 
             uint secondGlyphIndex = 0;
-            TMP_Character secondCharacterSearch;
 
-            if (searchPattern.Length > 1 && m_fontAsset.characterLookupTable.TryGetValue(searchPattern[1], out secondCharacterSearch))
+            if(searchPattern.Length > 1 && foundSecond)
+            {
                 secondGlyphIndex = secondCharacterSearch.glyphIndex;
+            }
 
             int arraySize = m_MarkToBaseAdjustmentRecords_prop.arraySize;
 
@@ -2759,16 +2780,20 @@ namespace TMPro.EditorUtilities
 
             // Lookup glyph index of potential characters contained in the search pattern.
             uint firstGlyphIndex = 0;
-            TMP_Character firstCharacterSearch;
+            ref TMP_Character firstCharacterSearch = ref m_fontAsset.characterLookupTable.TryGet(searchPattern[0], out bool foundFirst);
+            ref TMP_Character secondCharacterSearch = ref m_fontAsset.characterLookupTable.TryGet(searchPattern[1], out bool foundSecond);
 
-            if (searchPattern.Length > 0 && m_fontAsset.characterLookupTable.TryGetValue(searchPattern[0], out firstCharacterSearch))
+            if(searchPattern.Length > 0 && foundFirst)
+            {
                 firstGlyphIndex = firstCharacterSearch.glyphIndex;
+            }
 
             uint secondGlyphIndex = 0;
-            TMP_Character secondCharacterSearch;
 
-            if (searchPattern.Length > 1 && m_fontAsset.characterLookupTable.TryGetValue(searchPattern[1], out secondCharacterSearch))
+            if(searchPattern.Length > 1 && foundSecond)
+            {
                 secondGlyphIndex = secondCharacterSearch.glyphIndex;
+            }
 
             int arraySize = m_MarkToMarkAdjustmentRecords_prop.arraySize;
 
