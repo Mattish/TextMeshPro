@@ -17,6 +17,8 @@ namespace TMPro
     {
         [FieldOffset(0)]
         public float3 Position;
+        [FieldOffset(0)]
+        public float4 PositionColor;
         [FieldOffset(12)]
         public uint Color;
         [FieldOffset(16)]

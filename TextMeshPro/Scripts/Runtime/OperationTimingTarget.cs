@@ -7,7 +7,7 @@ namespace TMPro
 #pragma warning disable 0414
     public ref struct OperationTimingTarget
     {
-        private readonly static long NanosecondsPerTick = (1000L*1000L*1000L) / Stopwatch.Frequency;
+        public readonly static long NanosecondsPerTick = (1000L*1000L*1000L) / Stopwatch.Frequency;
         
         private long start;
         

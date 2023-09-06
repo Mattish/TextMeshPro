@@ -101,6 +101,29 @@ namespace TMPro
             return false;
         }
 
+        public static ref TMP_CacheCalculatedCharacter TryGetCharacterFromFontAsset_DirectRef(uint unicode, TMP_FontAsset sourceFontAsset, out bool success)
+        {
+            if(unicode < 256)
+            {
+                success = true;
+                return ref sourceFontAsset.m_AsciiCachedCalculatedCharacterLookup[(int)unicode];
+            }
+            ref TMP_CacheCalculatedCharacter calculatedCharacter = ref sourceFontAsset.m_CachedCalculatedCharacterLookup.TryGet(unicode, out success);
+            if (success)
+            {
+                return ref calculatedCharacter;
+            }
+
+            if (sourceFontAsset.atlasPopulationMode == AtlasPopulationMode.Dynamic || sourceFontAsset.atlasPopulationMode == AtlasPopulationMode.DynamicOS)
+            {
+                if(sourceFontAsset.TryAddCharacterInternal(unicode, out TMP_Character character))
+                {
+                    calculatedCharacter = ref sourceFontAsset.m_CachedCalculatedCharacterLookup.TryGet(unicode, out success);
+                }
+            }
+            return ref calculatedCharacter;
+        }
+
 
         /// <summary>
         /// Internal function returning the text element character for the given unicode value taking into consideration the font style and weight.

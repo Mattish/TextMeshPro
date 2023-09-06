@@ -13,15 +13,21 @@ namespace TMPro
         public float GlyphHorizontalAdvance;
         public int AtlasIndex;
 
-        public static TMP_CacheCalculatedCharacter Calcuate(Glyph glyph)
+        public static TMP_CacheCalculatedCharacter Calcuate(Glyph glyph, float atlasDimensionSize)
         {
             GlyphMetrics glyphMetrics = glyph.metrics;
             GlyphRect glyphGlyphRect = glyph.glyphRect;
+            
+            float uvAtlasReciprocal = 1.0f / atlasDimensionSize;
             return new TMP_CacheCalculatedCharacter
             {
                 GlyphMetrics4 = new(glyphMetrics.horizontalBearingX, glyphMetrics.width, 0, glyphMetrics.horizontalBearingY),
                 GlyphHorizontalAdvance = glyphMetrics.horizontalAdvance,
-                GlyphBox = new (glyphGlyphRect.x, glyphGlyphRect.y, glyphGlyphRect.x + glyphGlyphRect.width, glyphGlyphRect.y + glyphGlyphRect.height),
+                GlyphBox = new (glyphGlyphRect.x * uvAtlasReciprocal, 
+                    glyphGlyphRect.y * uvAtlasReciprocal, 
+                    (glyphGlyphRect.x + glyphGlyphRect.width) * uvAtlasReciprocal, 
+                    (glyphGlyphRect.y + glyphGlyphRect.height) * uvAtlasReciprocal
+                ),
                 AtlasIndex = glyph.atlasIndex
             };
         }

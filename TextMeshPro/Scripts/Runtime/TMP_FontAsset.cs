@@ -198,6 +198,7 @@ namespace TMPro
         }
         internal SpeedictPointerLess<TMP_Character> m_CharacterLookupDictionary;
         public SpeedictPointerLess<TMP_CacheCalculatedCharacter> m_CachedCalculatedCharacterLookup;
+        public TMP_CacheCalculatedCharacter[] m_AsciiCachedCalculatedCharacterLookup = new TMP_CacheCalculatedCharacter[256];
 
 
         /// <summary>
@@ -898,8 +899,19 @@ namespace TMPro
                     character.textAsset = this;
                     character.glyph = m_GlyphLookupDictionary[glyphIndex];
                     character.IsWhiteSpace = unicode <= 0xFFFF && char.IsWhiteSpace((char)unicode);
-                    m_CachedCalculatedCharacterLookup.Add(unicode, TMP_CacheCalculatedCharacter.Calcuate(character.glyph));
+                    TMP_CacheCalculatedCharacter tmpCacheCalculatedCharacter = TMP_CacheCalculatedCharacter.Calcuate(character.glyph, m_AtlasHeight);
+                    m_CachedCalculatedCharacterLookup.Add(unicode, tmpCacheCalculatedCharacter);
+                    if(unicode < 256)
+                    {
+                        m_AsciiCachedCalculatedCharacterLookup[unicode] = tmpCacheCalculatedCharacter;
+                    }
                 }
+            }
+            
+            // Add specific lookups for ascii
+            for(uint i = 1; i < 256; ++i)
+            {
+                TryAddCharacterInternal(i, out _);
             }
 
             // Clear missing unicode lookup
@@ -1092,7 +1104,12 @@ namespace TMPro
                     if(FontEngine.TryGetGlyphWithUnicodeValue(unicode, glyphLoadFlags, out glyph))
                     {
                         m_CharacterLookupDictionary.Add(unicode, new TMP_Character(unicode, this, glyph));
-                        m_CachedCalculatedCharacterLookup.Add(unicode, TMP_CacheCalculatedCharacter.Calcuate(glyph));
+                        TMP_CacheCalculatedCharacter tmpCacheCalculatedCharacter = TMP_CacheCalculatedCharacter.Calcuate(glyph, m_AtlasHeight);
+                        m_CachedCalculatedCharacterLookup.Add(unicode, tmpCacheCalculatedCharacter);
+                        if(unicode < 256)
+                        {
+                            m_AsciiCachedCalculatedCharacterLookup[unicode] = tmpCacheCalculatedCharacter;
+                        }
                     }
 
                     return;
@@ -1104,7 +1121,12 @@ namespace TMPro
             // Synthesize and add missing glyph and character
             glyph = new Glyph(0, new GlyphMetrics(0, 0, 0, 0, 0), GlyphRect.zero, 1.0f, 0);
             m_CharacterLookupDictionary.Add(unicode, new TMP_Character(unicode, this, glyph));
-            m_CachedCalculatedCharacterLookup.Add(unicode, TMP_CacheCalculatedCharacter.Calcuate(glyph));
+            TMP_CacheCalculatedCharacter cacheCalculatedCharacter = TMP_CacheCalculatedCharacter.Calcuate(glyph, m_AtlasHeight);
+            m_CachedCalculatedCharacterLookup.Add(unicode, cacheCalculatedCharacter);
+            if(unicode < 256)
+            {
+                m_AsciiCachedCalculatedCharacterLookup[unicode] = cacheCalculatedCharacter;
+            }
         }
 
         //internal HashSet<int> FallbackSearchQueryLookup = new HashSet<int>();
@@ -1112,7 +1134,12 @@ namespace TMPro
         internal void AddCharacterToLookupCache(uint unicode, TMP_Character character)
         {
             m_CharacterLookupDictionary.Add(unicode, character);
-            m_CachedCalculatedCharacterLookup.Add(unicode, TMP_CacheCalculatedCharacter.Calcuate(character.glyph));
+            var tmpCacheCalculatedCharacter = TMP_CacheCalculatedCharacter.Calcuate(character.glyph, m_AtlasHeight);
+            m_CachedCalculatedCharacterLookup.Add(unicode, tmpCacheCalculatedCharacter);
+            if(unicode < 256)
+            {
+                m_AsciiCachedCalculatedCharacterLookup[unicode] = tmpCacheCalculatedCharacter;
+            }
 
             // Add font asset to fallback references.
             //FallbackSearchQueryLookup.Add(character.textAsset.instanceID);
@@ -1830,7 +1857,12 @@ namespace TMPro
 
                     m_CharacterTable.Add(character);
                     m_CharacterLookupDictionary.Add(unicode, character);
-                    m_CachedCalculatedCharacterLookup.Add(unicode, TMP_CacheCalculatedCharacter.Calcuate(character.glyph));
+                    TMP_CacheCalculatedCharacter tmpCacheCalculatedCharacter = TMP_CacheCalculatedCharacter.Calcuate(character.glyph, m_AtlasHeight);
+                    m_CachedCalculatedCharacterLookup.Add(unicode, tmpCacheCalculatedCharacter);
+                    if(unicode < 256)
+                    {
+                        m_AsciiCachedCalculatedCharacterLookup[unicode] = tmpCacheCalculatedCharacter;
+                    }
                     continue;
                 }
 
@@ -1903,8 +1935,12 @@ namespace TMPro
 
                 m_CharacterTable.Add(character);
                 m_CharacterLookupDictionary.Add(character.unicode, character);
-                m_CachedCalculatedCharacterLookup.Add(character.unicode, TMP_CacheCalculatedCharacter.Calcuate(character.glyph));
-
+                TMP_CacheCalculatedCharacter tmpCacheCalculatedCharacter = TMP_CacheCalculatedCharacter.Calcuate(character.glyph, m_AtlasHeight);
+                m_CachedCalculatedCharacterLookup.Add(character.unicode, tmpCacheCalculatedCharacter);
+                if(character.unicode < 256)
+                {
+                    m_AsciiCachedCalculatedCharacterLookup[character.unicode] = tmpCacheCalculatedCharacter;
+                }
                 // Remove character from list to add
                 m_CharactersToAdd.RemoveAt(i);
                 i -= 1;
@@ -2057,7 +2093,12 @@ namespace TMPro
 
                     m_CharacterTable.Add(character);
                     m_CharacterLookupDictionary.Add(unicode, character);
-                    m_CachedCalculatedCharacterLookup.Add(unicode, TMP_CacheCalculatedCharacter.Calcuate(character.glyph));
+                    TMP_CacheCalculatedCharacter tmpCacheCalculatedCharacter = TMP_CacheCalculatedCharacter.Calcuate(character.glyph, m_AtlasHeight);
+                    m_CachedCalculatedCharacterLookup.Add(unicode, tmpCacheCalculatedCharacter);
+                    if(unicode < 256)
+                    {
+                        m_AsciiCachedCalculatedCharacterLookup[unicode] = tmpCacheCalculatedCharacter;
+                    }
                     continue;
                 }
 
@@ -2129,7 +2170,12 @@ namespace TMPro
 
                 m_CharacterTable.Add(character);
                 m_CharacterLookupDictionary.Add(character.unicode, character);
-                m_CachedCalculatedCharacterLookup.Add(character.unicode, TMP_CacheCalculatedCharacter.Calcuate(character.glyph));
+                TMP_CacheCalculatedCharacter tmpCacheCalculatedCharacter = TMP_CacheCalculatedCharacter.Calcuate(character.glyph, m_AtlasHeight);
+                m_CachedCalculatedCharacterLookup.Add(character.unicode, tmpCacheCalculatedCharacter);
+                if(character.unicode < 256)
+                {
+                    m_AsciiCachedCalculatedCharacterLookup[character.unicode] = tmpCacheCalculatedCharacter;
+                }
 
                 // Remove character from list to add
                 m_CharactersToAdd.RemoveAt(i);
@@ -2518,7 +2564,12 @@ namespace TMPro
                 character = new TMP_Character(unicode, this, m_GlyphLookupDictionary[glyphIndex]);
                 m_CharacterTable.Add(character);
                 m_CharacterLookupDictionary.Add(unicode, character);
-                m_CachedCalculatedCharacterLookup.Add(unicode, TMP_CacheCalculatedCharacter.Calcuate(character.glyph));
+                TMP_CacheCalculatedCharacter tmpCacheCalculatedCharacter = TMP_CacheCalculatedCharacter.Calcuate(character.glyph, m_AtlasHeight);
+                m_CachedCalculatedCharacterLookup.Add(unicode, tmpCacheCalculatedCharacter);
+                if(unicode < 256)
+                {
+                    m_AsciiCachedCalculatedCharacterLookup[unicode] = tmpCacheCalculatedCharacter;
+                }
 
                 #if UNITY_EDITOR
                 // Makes the changes to the font asset persistent.
@@ -2596,7 +2647,12 @@ namespace TMPro
                 character = new TMP_Character(unicode, this, glyph);
                 m_CharacterTable.Add(character);
                 m_CharacterLookupDictionary.Add(unicode, character);
-                m_CachedCalculatedCharacterLookup.Add(unicode, TMP_CacheCalculatedCharacter.Calcuate(glyph));
+                TMP_CacheCalculatedCharacter tmpCacheCalculatedCharacter = TMP_CacheCalculatedCharacter.Calcuate(glyph, m_AtlasHeight);
+                m_CachedCalculatedCharacterLookup.Add(unicode, tmpCacheCalculatedCharacter);
+                if(unicode < 256)
+                {
+                    m_AsciiCachedCalculatedCharacterLookup[unicode] = tmpCacheCalculatedCharacter;
+                }
 
                 m_GlyphIndexList.Add(glyphIndex);
                 m_GlyphIndexListNewlyAdded.Add(glyphIndex);
@@ -2639,8 +2695,13 @@ namespace TMPro
                     character = new TMP_Character(unicode, this, glyph);
                     m_CharacterTable.Add(character);
                     m_CharacterLookupDictionary.Add(unicode, character);
-                    m_CachedCalculatedCharacterLookup.Add(unicode, TMP_CacheCalculatedCharacter.Calcuate(glyph));
-
+                    TMP_CacheCalculatedCharacter tmpCacheCalculatedCharacter = TMP_CacheCalculatedCharacter.Calcuate(glyph, m_AtlasHeight);
+                    m_CachedCalculatedCharacterLookup.Add(unicode, tmpCacheCalculatedCharacter);
+                    if(unicode < 256)
+                    {
+                        m_AsciiCachedCalculatedCharacterLookup[unicode] = tmpCacheCalculatedCharacter;
+                    }
+                    
                     m_GlyphIndexList.Add(glyphIndex);
                     m_GlyphIndexListNewlyAdded.Add(glyphIndex);
 
@@ -2722,7 +2783,12 @@ namespace TMPro
                 character = new TMP_Character(unicode, this, m_GlyphLookupDictionary[glyphIndex]);
                 m_CharacterTable.Add(character);
                 m_CharacterLookupDictionary.Add(unicode, character);
-                m_CachedCalculatedCharacterLookup.Add(unicode, TMP_CacheCalculatedCharacter.Calcuate(character.glyph));
+                TMP_CacheCalculatedCharacter tmpCacheCalculatedCharacter = TMP_CacheCalculatedCharacter.Calcuate(character.glyph, m_AtlasHeight);
+                m_CachedCalculatedCharacterLookup.Add(unicode, tmpCacheCalculatedCharacter);
+                if(unicode < 256)
+                {
+                    m_AsciiCachedCalculatedCharacterLookup[unicode] = tmpCacheCalculatedCharacter;
+                }
                 #if UNITY_EDITOR
                 // Makes the changes to the font asset persistent.
                 RegisterResourceForUpdate?.Invoke(this);
@@ -2748,8 +2814,12 @@ namespace TMPro
                 character = new TMP_Character(unicode, this, glyph);
                 m_CharacterTable.Add(character);
                 m_CharacterLookupDictionary.Add(unicode, character);
-                m_CachedCalculatedCharacterLookup.Add(unicode, TMP_CacheCalculatedCharacter.Calcuate(glyph));
-
+                TMP_CacheCalculatedCharacter tmpCacheCalculatedCharacter = TMP_CacheCalculatedCharacter.Calcuate(glyph, m_AtlasHeight);
+                m_CachedCalculatedCharacterLookup.Add(unicode, tmpCacheCalculatedCharacter);
+                if(unicode < 256)
+                {
+                    m_AsciiCachedCalculatedCharacterLookup[unicode] = tmpCacheCalculatedCharacter;
+                }
                 m_GlyphIndexList.Add(glyphIndex);
                 m_GlyphIndexListNewlyAdded.Add(glyphIndex);
 
@@ -2880,8 +2950,12 @@ namespace TMPro
 
                 m_CharacterTable.Add(character);
                 m_CharacterLookupDictionary.Add(character.unicode, character);
-                m_CachedCalculatedCharacterLookup.Add(character.unicode, TMP_CacheCalculatedCharacter.Calcuate(glyph));
-
+                TMP_CacheCalculatedCharacter tmpCacheCalculatedCharacter = TMP_CacheCalculatedCharacter.Calcuate(glyph, m_AtlasHeight);
+                m_CachedCalculatedCharacterLookup.Add(character.unicode, tmpCacheCalculatedCharacter);
+                if(character.unicode < 256)
+                {
+                    m_AsciiCachedCalculatedCharacterLookup[character.unicode] = tmpCacheCalculatedCharacter;
+                }
                 // Remove character
                 m_CharactersToAdd.RemoveAt(i);
                 i -= 1;
