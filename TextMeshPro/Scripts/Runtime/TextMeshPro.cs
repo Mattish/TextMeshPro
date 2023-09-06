@@ -33,11 +33,11 @@ namespace TMPro
         [BurstCompile(CompileSynchronously = true, OptimizeFor = OptimizeFor.Performance)]
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static unsafe void BurstCompiled_CalculatePositionUVColor([NoAlias] in TMP_MeshVertex* verts,in float4 glyph4, in float4 parameters, in float4 glyphBox, 
-            in float4 colorSrc, float xScale)
+            in float4 colorSrc, float adjustedScale, float xScale)
         {
             //float xAdvance, float baselineOffset, float adjustedScale
             float4 lrdu = glyph4 * parameters.z;
-            lrdu += new float4(parameters.x, (glyph4.x * parameters.z) + parameters.x, parameters.y, parameters.y);
+            lrdu += new float4(parameters.x * adjustedScale, (glyph4.x * parameters.z) + (parameters.x * adjustedScale), parameters.y, parameters.y);
             verts[0].PositionColor = new float4(lrdu.x,  lrdu.z, 0, colorSrc.x);
             verts[1].PositionColor = new float4(lrdu.x,  lrdu.w, 0, colorSrc.y);
             verts[2].PositionColor = new float4(lrdu.y, lrdu.w, 0, colorSrc.z);
@@ -2358,7 +2358,7 @@ namespace TMPro
                     // line break
                     if(unicode == '\n')
                     {
-                        currentLine.TotalWidth = calcPosBurstParams.x;
+                        currentLine.TotalWidth = calcPosBurstParams.x * adjustedScale;
                         calcPosBurstParams.x = 0;
                         currentLine = ref mattishCaseLineInfos[lineInfoCount + 1];
                         currentLine.LineYOffset = lineHeight * (lineInfoCount + 1);
@@ -2372,13 +2372,13 @@ namespace TMPro
                         int bufferIndex = totalCharacterCount * 4;
 
                         TextMeshProBurst.BurstCompiled_CalculatePositionUVColor(&verts[bufferIndex], in calculatedCharacter.GlyphMetrics4, in calcPosBurstParams,
-                            in calculatedCharacter.GlyphBox, in srcColors, xScale);
+                            in calculatedCharacter.GlyphBox, in srcColors, adjustedScale, xScale);
                     }
 
                     // Update the current line with the calculated width of the glyph
                     ++currentLine.Length;
                     ++totalCharacterCount;
-                    calcPosBurstParams.x += (calculatedCharacter.GlyphHorizontalAdvance + normalSpacingCharacterSpacingOffset) * adjustedScale;
+                    calcPosBurstParams.x += calculatedCharacter.GlyphHorizontalAdvance + normalSpacingCharacterSpacingOffset;
                 }
                 ot.Record(ref MattCounter5Value);
 
@@ -2390,7 +2390,7 @@ namespace TMPro
                 MattCountValue.Value += totalCharacterCount;
 
                 // Finalise this line
-                currentLine.TotalWidth = calcPosBurstParams.x;
+                currentLine.TotalWidth = calcPosBurstParams.x * adjustedScale;
                 mattishCaseLineInfos[lineInfoCount++] = currentLine;
 
                 if(m_characterCount == 0)
