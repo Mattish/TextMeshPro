@@ -29,24 +29,36 @@ namespace TMPro
 {
     [BurstCompile(CompileSynchronously = true)]
     internal static class TextMeshProBurst
-    {
+    {        
         [BurstCompile(CompileSynchronously = true, OptimizeFor = OptimizeFor.Performance)]
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static unsafe void BurstCompiled_CalculatePositionUVColor([NoAlias] in TMP_MeshVertex* verts,in float4 glyph4, in float4 parameters, in float4 glyphBox, 
-            in float4 colorSrc, float adjustedScale, float xScale)
+        public static unsafe void BurstCompiled_CalculatePositionUVColor_Multi([NoAlias] in TMP_MeshVertex* verts, in TMP_CacheCalculatedCharacter* calculatedCharacters, int characterStartIndex, int characterCount, ref float4 parameters, 
+            in float4 colorSrc, float adjustedScale, float xScale, float normalSpacingCharacterSpacingOffset)
         {
-            //float xAdvance, float baselineOffset, float adjustedScale
-            float4 lrdu = glyph4 * parameters.z;
-            lrdu += new float4(parameters.x * adjustedScale, (glyph4.x * parameters.z) + (parameters.x * adjustedScale), parameters.y, parameters.y);
-            verts[0].PositionColor = new float4(lrdu.x,  lrdu.z, 0, colorSrc.x);
-            verts[1].PositionColor = new float4(lrdu.x,  lrdu.w, 0, colorSrc.y);
-            verts[2].PositionColor = new float4(lrdu.y, lrdu.w, 0, colorSrc.z);
-            verts[3].PositionColor = new float4(lrdu.y, lrdu.z, 0,  colorSrc.w);
+            for(int i = 0; i < characterCount; i++)
+            {
+                int targetCharacterIndex = characterStartIndex + i;
+                TMP_CacheCalculatedCharacter calculatedCharacter = calculatedCharacters[targetCharacterIndex];
+
+                {
+                    int bufferIndex = targetCharacterIndex * 4;
+                    
+                    float4 lrdu = calculatedCharacter.GlyphMetrics4 * parameters.z;
+                    lrdu += new float4(parameters.x * adjustedScale, (calculatedCharacter.GlyphMetrics4.x * parameters.z) + (parameters.x * adjustedScale), parameters.y, parameters.y);
+                    verts[bufferIndex + 0].PositionColor = new float4(lrdu.x,  lrdu.z, 0, colorSrc.x);
+                    verts[bufferIndex + 1].PositionColor = new float4(lrdu.x,  lrdu.w, 0, colorSrc.y);
+                    verts[bufferIndex + 2].PositionColor = new float4(lrdu.y, lrdu.w, 0, colorSrc.z);
+                    verts[bufferIndex + 3].PositionColor = new float4(lrdu.y, lrdu.z, 0,  colorSrc.w);
             
-            verts[0].TextCoord0 = new float4(glyphBox.xy, 0, xScale);
-            verts[1].TextCoord0 = new float4(glyphBox.xw, 0, xScale);
-            verts[2].TextCoord0 = new float4(glyphBox.zw, 0, xScale);
-            verts[3].TextCoord0 = new float4(glyphBox.zy, 0, xScale);
+                    verts[bufferIndex + 0].TextCoord0 = new float4(calculatedCharacter.GlyphBox.xy, 0, xScale);
+                    verts[bufferIndex + 1].TextCoord0 = new float4(calculatedCharacter.GlyphBox.xw, 0, xScale);
+                    verts[bufferIndex + 2].TextCoord0 = new float4(calculatedCharacter.GlyphBox.zw, 0, xScale);
+                    verts[bufferIndex + 3].TextCoord0 = new float4(calculatedCharacter.GlyphBox.zy, 0, xScale);
+                }
+
+                // Update the current line with the calculated width of the glyph
+                parameters.x += calculatedCharacter.GlyphHorizontalAdvance + normalSpacingCharacterSpacingOffset;
+            }
         }
         
         [BurstCompile(CompileSynchronously = true)]
@@ -2250,9 +2262,12 @@ namespace TMPro
             }
         }
         
-        private static TMP_MeshVertex[] vertsBuffer = new TMP_MeshVertex[2048];
+        // TODO: these should be checked against and sized accordingly to stop over running.
+        // As we do pointer stuff with these, if we overrun the editor/game is going to blow up randomly and confusingly.
+        private static TMP_MeshVertex[] vertsBuffer = new TMP_MeshVertex[1024 * 4];
+        private static MattishCaseLineInfo[] mattishCaseLineInfos = new MattishCaseLineInfo[256];
         
-        private unsafe void DoMattishCaseGenerateTextMesh(TextProcessingElement[] textProcessingArray)
+        private unsafe void DoMattishCaseGenerateTextMesh()
         {
             var ot1 = OperationTimingTarget.Start();
             
@@ -2280,11 +2295,12 @@ namespace TMPro
             Span<int> materialIndexToCharCount = stackalloc int[16];
             Span<Color32> quadColors = stackalloc Color32[4];
             
-            Span<MattishCaseLineInfo> mattishCaseLineInfos = stackalloc MattishCaseLineInfo[256];
+            //Span<MattishCaseLineInfo> mattishCaseLineInfos = stackalloc MattishCaseLineInfo[256];
+            
             int lineInfoCount = 0;
             
             ref MattishCaseLineInfo currentLine = ref mattishCaseLineInfos[0];
-            currentLine.Length = 1;
+            currentLine.Length = 0;
             currentLine.LineYOffset = 0;
             currentLine.TotalWidth = 0;
             
@@ -2296,67 +2312,61 @@ namespace TMPro
             }
             
             m_materialReferenceIndexLookup.Clear();
-            atlasIndex = MaterialReference.AddMaterialReference(m_currentMaterial, m_currentFontAsset, ref m_materialReferences, m_materialReferenceIndexLookup);
             
             // ...State setup finished
             
             ot1.Record(ref MattCounter7Value);
             fixed(TMP_MeshVertex* verts = vertsBuffer)
-            {
+            fixed(TMP_CacheCalculatedCharacter* resolvedChars = m_CharacterResolvedCharacters)
+            {                
                 var ot = OperationTimingTarget.Start();
-                for(int i = 0; i < textProcessingArray.Length && textProcessingArray[i].unicode != 0; i++)
+
+                for(int batchIndex = 0; batchIndex < m_CharacterBatchCount; ++batchIndex)
                 {
-                    uint unicode = textProcessingArray[i].unicode;
-                    uint nextCharacter = textProcessingArray[i + 1].unicode;
-
-                    ref TMP_CacheCalculatedCharacter calculatedCharacter = ref TMP_FontAssetUtilities.TryGetCharacterFromFontAsset_DirectRef(unicode, m_currentFontAsset, out bool found);
-                    if(!found)
+                    ref MattishCharacterBatch batch = ref m_CharacterBatches[batchIndex];
+                    if((batch.BatchTypeFlag & MattishBatchTypeFlag.Material) != 0 && batch.AtlasIndex != byte.MaxValue)
                     {
-                        //TODO: ?
-                        //DoMissingGlyphCallback((int)unicode, textProcessingArray[i].stringIndex, m_currentFontAsset);
-                        unicode = textProcessingArray[i].unicode = (uint)TMP_Settings.missingGlyphCharacter == 0 ? 9633 : (uint)TMP_Settings.missingGlyphCharacter;
-                        calculatedCharacter = ref TMP_FontAssetUtilities.TryGetCharacterFromFontAsset_DirectRef(unicode, m_currentFontAsset, out found);
-                        // If we don't have a missing glyph character here, we're donezo
-                    }
-                    unchecked
-                    {
-                        //nextCharacter >= 0xFE00 && nextCharacter <= 0xFE0F
-                        if((nextCharacter - 0xFE0F) <= 0x0F)
-                        {
-                            uint variantGlyphIndex = m_currentFontAsset.GetGlyphVariantIndex((uint)unicode, nextCharacter);
-
-                            if(variantGlyphIndex != 0)
-                            {
-                                if(m_currentFontAsset.TryAddGlyphInternal(variantGlyphIndex, out Glyph glyph))
-                                {
-                                    calculatedCharacter = TMP_CacheCalculatedCharacter.Calcuate(glyph, m_currentFontAsset.m_AtlasHeight);
-                                }
-                            }
-
-                            ++i;
-                            // This only handles single glyph variants, I guess?
-                            //TODO: Handle changed variations? Are they even a thing? I assume they are with how emojis work
-                        }
-                    }
-
-                    if(atlasIndex != calculatedCharacter.AtlasIndex)
-                    {
-                        // TODO:`TMP_MaterialManager.GetFallbackMaterial` is bloated
-                        // it handles changing of material properties AND keeping atlas up to date on every character, no thanks
-                        Material targetMaterial = calculatedCharacter.AtlasIndex > 0
-                            ? TMP_MaterialManager.GetFallbackMaterial(m_currentFontAsset, m_currentMaterial, calculatedCharacter.AtlasIndex)
+                        Material targetMaterial = batch.AtlasIndex > 0
+                            ? TMP_MaterialManager.GetFallbackMaterial(m_currentFontAsset, m_currentMaterial, batch.AtlasIndex)
                             : m_currentMaterial;
                         m_currentMaterialIndex = MaterialReference.AddMaterialReference(targetMaterial, m_currentFontAsset, ref m_materialReferences, m_materialReferenceIndexLookup);
-                        materialIndexToCharCount[m_currentMaterialIndex]++;
-                        atlasIndex = calculatedCharacter.AtlasIndex;
                     }
-                    else
-                    {
-                        materialIndexToCharCount[m_currentMaterialIndex]++;
-                    }
+                    materialIndexToCharCount[m_currentMaterialIndex] += batch.Length;
 
-                    // line break
-                    if(unicode == '\n')
+
+                    TextMeshProBurst.BurstCompiled_CalculatePositionUVColor_Multi(
+                        verts,
+                        resolvedChars,
+                        batch.StartIndex,
+                        batch.Length,
+                        ref calcPosBurstParams,
+                        in srcColors,
+                        adjustedScale,
+                        xScale,
+                        normalSpacingCharacterSpacingOffset
+                    );
+                    
+                    // for(int i = 0; i < batch.Length; i++)
+                    // {
+                    //     ref TMP_CacheCalculatedCharacter calculatedCharacter = ref m_CharacterResolvedCharacters[batch.StartIndex + i];
+                    //
+                    //     // This is where we actually calculate the quad
+                    //     {
+                    //         int bufferIndex = totalCharacterCount * 4;
+                    //
+                    //         TextMeshProBurst.BurstCompiled_CalculatePositionUVColor(&verts[bufferIndex], in calculatedCharacter.GlyphMetrics4, in calcPosBurstParams,
+                    //             in calculatedCharacter.GlyphBox, in srcColors, adjustedScale, xScale);
+                    //     }
+                    //
+                    //     // Update the current line with the calculated width of the glyph
+                    //     calcPosBurstParams.x += calculatedCharacter.GlyphHorizontalAdvance + normalSpacingCharacterSpacingOffset;
+                    //     totalCharacterCount++; //TODO: get rid of totalCharacterCount as we know characters
+                    // }
+
+                    currentLine.Length += batch.Length;
+                    totalCharacterCount += batch.Length;
+                    // If this batch is a line, then commit the calculated line details
+                    if((batch.BatchTypeFlag & MattishBatchTypeFlag.LineBreak) != 0)
                     {
                         currentLine.TotalWidth = calcPosBurstParams.x * adjustedScale;
                         calcPosBurstParams.x = 0;
@@ -2366,20 +2376,8 @@ namespace TMPro
                         currentLine.TotalWidth = 0;
                         ++lineInfoCount;
                     }
-
-                    // This is where we actually calculate the quad
-                    {
-                        int bufferIndex = totalCharacterCount * 4;
-
-                        TextMeshProBurst.BurstCompiled_CalculatePositionUVColor(&verts[bufferIndex], in calculatedCharacter.GlyphMetrics4, in calcPosBurstParams,
-                            in calculatedCharacter.GlyphBox, in srcColors, adjustedScale, xScale);
-                    }
-
-                    // Update the current line with the calculated width of the glyph
-                    ++currentLine.Length;
-                    ++totalCharacterCount;
-                    calcPosBurstParams.x += calculatedCharacter.GlyphHorizontalAdvance + normalSpacingCharacterSpacingOffset;
                 }
+                
                 ot.Record(ref MattCounter5Value);
 
                 var ot8 = OperationTimingTarget.Start();
@@ -2393,6 +2391,7 @@ namespace TMPro
                 currentLine.TotalWidth = calcPosBurstParams.x * adjustedScale;
                 mattishCaseLineInfos[lineInfoCount++] = currentLine;
 
+                //TODO:
                 if(m_characterCount == 0)
                 {
                     ClearMesh(true);
@@ -2640,6 +2639,7 @@ namespace TMPro
                     // Degenerate the remaining vertex
                     int vCount = m_characterCount * 4;
                     long bytesLength = (m_mesh.vertexCount - vCount) * sizeof(TMP_MeshVertex);
+                    bytesLength = Math.Clamp(bytesLength, 0, bytesLength);
                     UnsafeUtility.MemClear(&verts[vCount], bytesLength);
 
                     var ot6 = OperationTimingTarget.Start();
@@ -2718,9 +2718,14 @@ namespace TMPro
             instanceMesh.RecalculateBounds();
         }
         
-        private static unsafe void UpdateMeshInfo2(Mesh instanceMesh, TMP_MeshVertex[] data)
+        private static unsafe void UpdateMeshInfo2(Mesh instanceMesh, Span<TMP_MeshVertex> data)
         {
             int verticesSize = instanceMesh.vertexCount;
+            if(data.Length < verticesSize)
+            {
+                
+            }
+            Debug.Assert(data.Length >= verticesSize);
             
             fixed(TMP_MeshVertex* verts = data)
             {
@@ -2771,7 +2776,7 @@ namespace TMPro
 
             if(m_isMattishOptimization)
             {
-                DoMattishCaseGenerateTextMesh(m_TextProcessingArray);
+                DoMattishCaseGenerateTextMesh();
                 k_GenerateTextMarker.End();
                 return;
             }

@@ -158,7 +158,7 @@ namespace TMPro
             get { return instance.m_warningsDisabled; }
         }
         [SerializeField]
-        private bool m_warningsDisabled;
+        private bool m_warningsDisabled = true;
 
         /// <summary>
         /// Returns the Default Font Asset to be used by newly created text objects.
