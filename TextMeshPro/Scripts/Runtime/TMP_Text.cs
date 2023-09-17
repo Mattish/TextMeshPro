@@ -3,7 +3,7 @@
 using System;
 using System.Text;
 using System.Collections.Generic;
-using Collections;
+using TMPro.Collections;
 using Unity.Profiling;
 using UnityEngine;
 using UnityEngine.Serialization;
@@ -109,7 +109,7 @@ namespace TMPro
     /// <summary>
     /// Base class which contains common properties and functions shared between the TextMeshPro and TextMeshProUGUI component.
     /// </summary>
-    public abstract class TMP_Text : MaskableGraphic
+    public abstract partial class TMP_Text : MaskableGraphic
     {
         /// <summary>
         /// A string containing the text to be displayed.
@@ -934,16 +934,6 @@ namespace TMPro
         [SerializeField]
         protected bool m_isRichText = true; // Used to enable or disable Rich Text.
         
-        /// <summary>
-        /// Enables or Disables Mattish Optimizations
-        /// </summary>
-        public bool isMattishOptimization
-        {
-            get { return m_isMattishOptimization; }
-            set { if (m_isMattishOptimization == value) return; m_isMattishOptimization = value; m_havePropertiesChanged = true; SetVerticesDirty(); SetLayoutDirty(); }
-        }
-        [SerializeField]
-        protected bool m_isMattishOptimization = true; // Used to enable or disable Mattish Optimizations.
 
         /// <summary>
         /// Determines if text assets defined in the Emoji Fallback Text Assets list in the TMP Settings will be search first for characters defined as Emojis in the Unicode 14.0 standards.
@@ -1573,26 +1563,7 @@ namespace TMPro
         /// The number of Unicode characters that have been parsed and contained in the m_InternalParsingBuffer
         /// </summary>
         internal int m_InternalTextProcessingArraySize;
-        
-        internal TMP_CacheCalculatedCharacter[] m_CharacterResolvedCharacters = new TMP_CacheCalculatedCharacter[8];
-        internal MattishCharacterBatch[] m_CharacterBatches = new MattishCharacterBatch[4];
-        internal int m_CharacterBatchCount;
-        
-        [Flags]
-        internal enum MattishBatchTypeFlag
-        {
-            None,
-            LineBreak,
-            Material
-        }
-    
-        internal struct MattishCharacterBatch
-        {
-            public MattishBatchTypeFlag BatchTypeFlag;
-            public int StartIndex;
-            public int Length;
-            public byte AtlasIndex;
-        }
+       
 
         [System.Diagnostics.DebuggerDisplay("Unicode ({unicode})  '{(char)unicode}'")]
         internal struct TextProcessingElement
@@ -2080,7 +2051,7 @@ namespace TMPro
             }
 
             // Make sure array size is appropriate
-            if(length >= m_TextBackingArray.Capacity)
+            if((length + 1) >= m_TextBackingArray.Capacity)
             {
                 m_TextBackingArray.Resize((length));
                 requiresResizeOrDifferent = true;
@@ -2126,7 +2097,7 @@ namespace TMPro
             }
 
             // Make sure array size is appropriate
-            if (length >= m_TextBackingArray.Capacity)
+            if ((length + 1) >= m_TextBackingArray.Capacity)
                 m_TextBackingArray.Resize((length));
 
             int end = readIndex + length;
@@ -2167,7 +2138,7 @@ namespace TMPro
             }
 
             // Make sure array size is appropriate
-            if(length >= m_TextBackingArray.Capacity)
+            if((length + 1) >= m_TextBackingArray.Capacity)
             {
                 m_TextBackingArray.Resize((length));
                 requiresResizeOrDifferent = true;
@@ -2419,95 +2390,7 @@ namespace TMPro
 
             m_TextProcessingArray[writeIndex].unicode = 0;
             m_InternalTextProcessingArraySize = writeIndex;
-
-
-            // Mattish pre-processing
-            PopulateTextProcessingArrayMattish(srcLength);
         }
-        private void PopulateTextProcessingArrayMattish(int srcLength)
-        {
-            m_CharacterBatchCount = 0;
-
-            if(m_CharacterResolvedCharacters.Length < srcLength)
-            {
-                Array.Resize(ref m_CharacterResolvedCharacters, (int)(srcLength * 1.5));
-            }
-
-            ref MattishCharacterBatch characterBatch = ref m_CharacterBatches[0];
-            characterBatch.BatchTypeFlag = MattishBatchTypeFlag.Material;
-            characterBatch.Length = 0;
-            characterBatch.AtlasIndex = 0;
-
-            int countResolvedCharacters = 0;
-            for(int i = 0; i < srcLength; ++i)
-            {
-                uint unicode = m_TextBackingArray[i];
-                uint nextCharacter = m_TextBackingArray[i + 1];
-
-                ref TMP_CacheCalculatedCharacter calculatedCharacter = ref TMP_FontAssetUtilities.TryGetCharacterFromFontAsset_DirectRef(unicode, m_fontAsset, out bool found);
-                if(!found)
-                {
-                    //TODO: ?
-                    //DoMissingGlyphCallback((int)unicode, textProcessingArray[i].stringIndex, m_currentFontAsset);
-                    unicode = (uint)TMP_Settings.missingGlyphCharacter == 0 ? 9633 : (uint)TMP_Settings.missingGlyphCharacter;
-                    calculatedCharacter = ref TMP_FontAssetUtilities.TryGetCharacterFromFontAsset_DirectRef(unicode, m_fontAsset, out found);
-                    // If we don't have a missing glyph character here, we're donezo
-                }
-                unchecked
-                {
-                    //nextCharacter >= 0xFE00 && nextCharacter <= 0xFE0F
-                    if((nextCharacter - 0xFE0F) <= 0x0F)
-                    {
-                        uint variantGlyphIndex = m_currentFontAsset.GetGlyphVariantIndex((uint)unicode, nextCharacter);
-
-                        if(variantGlyphIndex != 0)
-                        {
-                            if(m_currentFontAsset.TryAddGlyphInternal(variantGlyphIndex, out Glyph glyph))
-                            {
-                                calculatedCharacter = TMP_CacheCalculatedCharacter.Calcuate(glyph, m_fontAsset.m_AtlasHeight);
-                            }
-                        }
-
-                        ++i;
-                        // This only handles single glyph variants, I guess?
-                        //TODO: Handle changed variations? Are they even a thing? I assume they are with how emojis work
-                    }
-                }
-
-                MattishBatchTypeFlag resultingFlag = MattishBatchTypeFlag.None;
-
-                bool atlasIndexChanging = characterBatch.AtlasIndex != calculatedCharacter.AtlasIndex;
-                bool isLineBreak = unicode == '\n';
-                
-                // If we have any flags, finish up this batch
-                if(isLineBreak || atlasIndexChanging)
-                {
-                    int nextStartIndex = characterBatch.StartIndex + characterBatch.Length;
-                    characterBatch.BatchTypeFlag |= isLineBreak ? MattishBatchTypeFlag.LineBreak : MattishBatchTypeFlag.None;
-
-                    if(m_CharacterBatches.Length < m_CharacterBatchCount + 2)
-                    {
-                        Array.Resize(ref m_CharacterBatches, m_CharacterBatchCount * 2);
-                    }
-
-                    characterBatch = ref m_CharacterBatches[++m_CharacterBatchCount];
-                    characterBatch.Length = 0;
-                    characterBatch.BatchTypeFlag = atlasIndexChanging ? MattishBatchTypeFlag.Material : MattishBatchTypeFlag.None;
-                    characterBatch.StartIndex = nextStartIndex;
-                }
-                
-                // Only populate resolved characters if it's not a linebreak
-                if((resultingFlag & MattishBatchTypeFlag.LineBreak) == 0)
-                {
-                    m_CharacterResolvedCharacters[countResolvedCharacters++] = calculatedCharacter;
-                    ++characterBatch.Length;
-                }
-
-            }
-
-            m_CharacterBatchCount++;
-        }
-
         /// <summary>
         /// Function used in conjunction with GetPreferredValues
         /// </summary>
@@ -2525,6 +2408,14 @@ namespace TMPro
             PopulateTextProcessingArray();
 
             m_inputSource = currentInputSource;
+            // Mattish pre-processing
+            if(m_isMattishOptimization)
+            {
+#if UNITY_EDITOR
+                m_text = sourceText;
+#endif
+                PopulateTextProcessingArrayMattish();
+            }
         }
 
         /// <summary>
@@ -2533,6 +2424,7 @@ namespace TMPro
         /// <param name="sourceText">String containing the text.</param>
         public void SetText(string sourceText)
         {
+            
             int srcLength = sourceText == null ? 0 : sourceText.Length;
 
             bool didChange = PopulateTextBackingArray(sourceText, 0, srcLength);
@@ -2551,6 +2443,12 @@ namespace TMPro
 
             SetVerticesDirty();
             SetLayoutDirty();
+            
+            // Mattish pre-processing
+            if(m_isMattishOptimization)
+            {
+                PopulateTextProcessingArrayMattish();
+            }
         }
 
         /// <summary>
@@ -2862,7 +2760,7 @@ namespace TMPro
         /// <param name="start">The index of the first character to read from in the array.</param>
         /// <param name="length">The number of characters in the array to be read.</param>
         void SetText(StringBuilder sourceText, int start, int length)
-        {
+        {            
             PopulateTextBackingArray(sourceText, start, length);
 
             m_IsTextBackingStringDirty = true;
@@ -2880,6 +2778,11 @@ namespace TMPro
 
             SetVerticesDirty();
             SetLayoutDirty();
+            // Mattish pre-processing
+            if(m_isMattishOptimization)
+            {
+                PopulateTextProcessingArrayMattish();
+            }
         }
 
         /// <summary>
@@ -2927,9 +2830,9 @@ namespace TMPro
 
             m_IsTextBackingStringDirty = true;
 
-            #if UNITY_EDITOR
+#if UNITY_EDITOR
             m_text = InternalTextBackingArrayToString();
-            #endif
+#endif
 
             // Set input source
             m_inputSource = TextInputSources.SetTextArray;
@@ -2943,6 +2846,11 @@ namespace TMPro
 
             SetVerticesDirty();
             SetLayoutDirty();
+             // Mattish pre-processing
+            if(m_isMattishOptimization)
+            { 
+                PopulateTextProcessingArrayMattish();
+            }
         }
 
         /// <summary>
@@ -5588,60 +5496,6 @@ namespace TMPro
             //m_textInfo.characterInfo[m_characterCount].vertex_BR.tangent = tangent;
             #endregion end Normals & Tangents
 
-        }
-
-        /// <summary>
-        /// Mattish optimization. Store vertex attributes into the appropriate TMP_MeshInfo.
-        /// </summary>
-        /// <param name="i"></param>
-        /// <param name="index_X4"></param>
-        protected virtual void FillCharacterVertexBuffers2(ref TMP_CharacterInfo characterInfo, ref TMP_MeshInfo meshInfo)
-        {
-            int index_X4 = meshInfo.vertexCount;
-
-            // Check to make sure our current mesh buffer allocations can hold these new Quads.
-            if(index_X4 >= meshInfo.vertices.Length)
-            {
-                meshInfo.ResizeMeshInfo(Mathf.NextPowerOfTwo((index_X4 + 4) / 4));
-            }
-
-            characterInfo.vertexIndex = index_X4;
-
-            // Setup Vertices for Characters
-            meshInfo.vertices[0 + index_X4] = characterInfo.vertex_BL.position;
-            meshInfo.vertices[1 + index_X4] = characterInfo.vertex_TL.position;
-            meshInfo.vertices[2 + index_X4] = characterInfo.vertex_TR.position;
-            meshInfo.vertices[3 + index_X4] = characterInfo.vertex_BR.position;
-
-            // Setup UVS0
-            meshInfo.uvs0[0 + index_X4] = characterInfo.vertex_BL.uv;
-            meshInfo.uvs0[1 + index_X4] = characterInfo.vertex_TL.uv;
-            meshInfo.uvs0[2 + index_X4] = characterInfo.vertex_TR.uv;
-            meshInfo.uvs0[3 + index_X4] = characterInfo.vertex_BR.uv;
-
-            // Setup UVS2
-            meshInfo.uvs2[0 + index_X4] = characterInfo.vertex_BL.uv2;
-            meshInfo.uvs2[1 + index_X4] = characterInfo.vertex_TL.uv2;
-            meshInfo.uvs2[2 + index_X4] = characterInfo.vertex_TR.uv2;
-            meshInfo.uvs2[3 + index_X4] = characterInfo.vertex_BR.uv2;
-            
-            // setup Vertex Colors
-            if(m_ConvertToLinearSpace)
-            {
-                meshInfo.colors32[0 + index_X4] = characterInfo.vertex_BL.color.GammaToLinear();
-                meshInfo.colors32[1 + index_X4] = characterInfo.vertex_TL.color.GammaToLinear();
-                meshInfo.colors32[2 + index_X4] = characterInfo.vertex_TR.color.GammaToLinear();
-                meshInfo.colors32[3 + index_X4] = characterInfo.vertex_BR.color.GammaToLinear();
-            }
-            else
-            {
-                meshInfo.colors32[0 + index_X4] = characterInfo.vertex_BL.color;
-                meshInfo.colors32[1 + index_X4] = characterInfo.vertex_TL.color;
-                meshInfo.colors32[2 + index_X4] = characterInfo.vertex_TR.color;
-                meshInfo.colors32[3 + index_X4] = characterInfo.vertex_BR.color;
-            }
-
-            meshInfo.vertexCount = index_X4 + 4;
         }
 
         /// <summary>

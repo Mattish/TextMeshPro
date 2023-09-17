@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using Collections;
+using TMPro.Collections;
 using UnityEngine;
 using UnityEngine.Serialization;
 using UnityEngine.TextCore;

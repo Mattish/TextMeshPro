@@ -1,7 +1,8 @@
 ﻿using System;
 using System.Runtime.CompilerServices;
 
-namespace Collections
+// ReSharper disable once CheckNamespace
+namespace TMPro.Collections
 {
     public class SpeedictPointerLess<TValue>
     {
