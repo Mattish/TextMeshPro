@@ -178,7 +178,7 @@ namespace TMPro.EditorUtilities
 
             position.width = k_AlignmentButtonWidth;
 
-            for (var i = 0; i < (TMP_BaseEditorPanel.TMP_HasMattishOptimizationsEnabled ? 3 : values.Length); i++)
+            for (var i = 0; i < (TMP_BaseEditorPanel.TMP_HasFastTextOptimizationsEnabled ? 3 : values.Length); i++)
             {
                 var oldValue = values[i];
                 var newValue = TMP_EditorUtility.EditorToggle(position, oldValue, TMP_UIStyleManager.alignContentA[i], i == 0 ? TMP_UIStyleManager.alignmentButtonLeft : (i == 5 ? TMP_UIStyleManager.alignmentButtonRight : TMP_UIStyleManager.alignmentButtonMid));
@@ -256,7 +256,7 @@ namespace TMPro.EditorUtilities
 
             position.width = k_AlignmentButtonWidth;
 
-            for (var i = 0; i < (TMP_BaseEditorPanel.TMP_HasMattishOptimizationsEnabled ? 3 : values.Length); i++)
+            for (var i = 0; i < (TMP_BaseEditorPanel.TMP_HasFastTextOptimizationsEnabled ? 3 : values.Length); i++)
             {
                 var oldValue = values[i];
                 var newValue = TMP_EditorUtility.EditorToggle(position, oldValue, TMP_UIStyleManager.alignContentB[i], i == 0 ? TMP_UIStyleManager.alignmentButtonLeft : (i == 5 ? TMP_UIStyleManager.alignmentButtonRight : TMP_UIStyleManager.alignmentButtonMid));

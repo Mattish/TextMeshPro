@@ -40,13 +40,13 @@ namespace TMPro
         }
         
         [BurstCompile(CompileSynchronously = true)]
-        public static unsafe void BurstCompiled_OffsetQuadPositionFull([NoAlias] in TMP_MeshVertex* positions,[NoAlias] in MattishCaseLineInfo* lines, int lineInfoCount)
+        public static unsafe void BurstCompiled_OffsetQuadPositionFull([NoAlias] in TMP_MeshVertex* positions,[NoAlias] in FastTextCaseLineInfo* lines, int lineInfoCount)
         {
             TMP_MeshVertex* pos = positions;
             
             for(int lineIndex = 0; lineIndex < lineInfoCount; lineIndex++)
             {
-                ref MattishCaseLineInfo lineInfo = ref lines[lineIndex];
+                ref FastTextCaseLineInfo lineInfo = ref lines[lineIndex];
                 float3 offset = new(lineInfo.CalculatedAlignmentJustificationOffset.x, -(lineInfo.LineYOffset + lineInfo.CalculatedAlignmentJustificationOffset.y), 0);
 
                 int total = lineInfo.Length * 4;

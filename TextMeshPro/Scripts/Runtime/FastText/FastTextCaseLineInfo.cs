@@ -3,7 +3,7 @@
 // ReSharper disable once CheckNamespace
 namespace TMPro
 {
-    internal struct MattishCaseLineInfo
+    internal struct FastTextCaseLineInfo
     {
         public float TotalWidth;
         public float LineYOffset;

@@ -21,7 +21,7 @@ namespace TMPro.EditorUtilities
             m_MaskableProp = serializedObject.FindProperty("m_Maskable");
         }
 
-        protected override void DrawExtraSettingsMattish()
+        protected override void DrawExtraSettingsFastText()
         {
             Rect rect = EditorGUILayout.GetControlRect(false, 24);
 

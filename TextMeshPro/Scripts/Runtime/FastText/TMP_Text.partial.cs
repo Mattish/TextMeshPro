@@ -10,37 +10,37 @@ namespace TMPro
     public abstract partial class TMP_Text : MaskableGraphic
     {
         /// <summary>
-        /// Enables or Disables Mattish Optimizations
+        /// Enables or Disables FastText Optimizations
         /// </summary>
-        public bool isMattishOptimization
+        public bool isFastTextOptimization
         {
-            get { return m_isMattishOptimization; }
-            set { if (m_isMattishOptimization == value) return; m_isMattishOptimization = value; m_havePropertiesChanged = true; SetVerticesDirty(); SetLayoutDirty(); }
+            get { return m_isFastTextOptimization; }
+            set { if (m_isFastTextOptimization == value) return; m_isFastTextOptimization = value; m_havePropertiesChanged = true; SetVerticesDirty(); SetLayoutDirty(); }
         }
         [SerializeField]
-        protected bool m_isMattishOptimization = true; // Used to enable or disable Mattish Optimizations.
+        protected bool m_isFastTextOptimization = true; // Used to enable or disable FastText Optimizations.
         
         internal TMP_CacheCalculatedCharacter[] m_CharacterResolvedCharacters = new TMP_CacheCalculatedCharacter[8];
-        internal MattishCharacterBatch[] m_CharacterBatches = new MattishCharacterBatch[4];
+        internal FastTextCharacterBatch[] m_CharacterBatches = new FastTextCharacterBatch[4];
         internal int m_CharacterBatchCount;
         
         [Flags]
-        internal enum MattishBatchTypeFlag
+        internal enum FastTextBatchTypeFlag
         {
             None,
             LineBreak,
             Material
         }
     
-        internal struct MattishCharacterBatch
+        internal struct FastTextCharacterBatch
         {
-            public MattishBatchTypeFlag BatchTypeFlag;
+            public FastTextBatchTypeFlag BatchTypeFlag;
             public int StartIndex;
             public int Length;
             public byte AtlasIndex;
         }
         
-        protected void PopulateTextProcessingArrayMattish()
+        protected void PopulateTextProcessingArrayFastText()
         {
             OperationTimingTarget op = OperationTimingTarget.Start();
             int srcLength = m_TextBackingArray.Count;
@@ -51,8 +51,8 @@ namespace TMPro
                 Array.Resize(ref m_CharacterResolvedCharacters, (int)(srcLength * 1.5));
             }
 
-            ref MattishCharacterBatch characterBatch = ref m_CharacterBatches[0];
-            characterBatch.BatchTypeFlag = MattishBatchTypeFlag.Material;
+            ref FastTextCharacterBatch characterBatch = ref m_CharacterBatches[0];
+            characterBatch.BatchTypeFlag = FastTextBatchTypeFlag.Material;
             characterBatch.Length = 0;
             characterBatch.AtlasIndex = 0;
 
@@ -100,13 +100,13 @@ namespace TMPro
                 bool atlasIndexChanging = characterBatch.AtlasIndex != calculatedCharacter.AtlasIndex;
                 bool isLineBreak = unicode == '\n';
 
-                MattishBatchTypeFlag resultingFlag = isLineBreak ? MattishBatchTypeFlag.LineBreak : MattishBatchTypeFlag.None;
+                FastTextBatchTypeFlag resultingFlag = isLineBreak ? FastTextBatchTypeFlag.LineBreak : FastTextBatchTypeFlag.None;
                 
                 // If we have any flags, finish up this batch
                 if(isLineBreak || atlasIndexChanging)
                 {
                     int nextStartIndex = characterBatch.StartIndex + characterBatch.Length;
-                    characterBatch.BatchTypeFlag |= isLineBreak ? MattishBatchTypeFlag.LineBreak : MattishBatchTypeFlag.None;
+                    characterBatch.BatchTypeFlag |= isLineBreak ? FastTextBatchTypeFlag.LineBreak : FastTextBatchTypeFlag.None;
 
                     if(m_CharacterBatches.Length < m_CharacterBatchCount + 2)
                     {
@@ -115,12 +115,12 @@ namespace TMPro
 
                     characterBatch = ref m_CharacterBatches[++m_CharacterBatchCount];
                     characterBatch.Length = 0;
-                    characterBatch.BatchTypeFlag = atlasIndexChanging ? MattishBatchTypeFlag.Material : MattishBatchTypeFlag.None;
+                    characterBatch.BatchTypeFlag = atlasIndexChanging ? FastTextBatchTypeFlag.Material : FastTextBatchTypeFlag.None;
                     characterBatch.StartIndex = nextStartIndex;
                 }
                 
                 // Only populate resolved characters if it's not a linebreak
-                if((resultingFlag & MattishBatchTypeFlag.LineBreak) == 0)
+                if((resultingFlag & FastTextBatchTypeFlag.LineBreak) == 0)
                 {
                     m_CharacterResolvedCharacters[countResolvedCharacters++] = calculatedCharacter;
                     ++characterBatch.Length;
@@ -144,13 +144,13 @@ namespace TMPro
                 bool atlasIndexChanging = characterBatch.AtlasIndex != calculatedCharacter.AtlasIndex;
                 bool isLineBreak = unicode == '\n';
                 
-                MattishBatchTypeFlag resultingFlag = isLineBreak ? MattishBatchTypeFlag.LineBreak : MattishBatchTypeFlag.None;
+                FastTextBatchTypeFlag resultingFlag = isLineBreak ? FastTextBatchTypeFlag.LineBreak : FastTextBatchTypeFlag.None;
                 
                 // If we have any flags, finish up this batch
                 if(isLineBreak || atlasIndexChanging)
                 {
                     int nextStartIndex = characterBatch.StartIndex + characterBatch.Length;
-                    characterBatch.BatchTypeFlag |= isLineBreak ? MattishBatchTypeFlag.LineBreak : MattishBatchTypeFlag.None;
+                    characterBatch.BatchTypeFlag |= isLineBreak ? FastTextBatchTypeFlag.LineBreak : FastTextBatchTypeFlag.None;
 
                     if(m_CharacterBatches.Length < m_CharacterBatchCount + 2)
                     {
@@ -159,12 +159,12 @@ namespace TMPro
 
                     characterBatch = ref m_CharacterBatches[++m_CharacterBatchCount];
                     characterBatch.Length = 0;
-                    characterBatch.BatchTypeFlag = atlasIndexChanging ? MattishBatchTypeFlag.Material : MattishBatchTypeFlag.None;
+                    characterBatch.BatchTypeFlag = atlasIndexChanging ? FastTextBatchTypeFlag.Material : FastTextBatchTypeFlag.None;
                     characterBatch.StartIndex = nextStartIndex;
                 }
                 
                 // Only populate resolved characters if it's not a linebreak
-                if((resultingFlag & MattishBatchTypeFlag.LineBreak) == 0)
+                if((resultingFlag & FastTextBatchTypeFlag.LineBreak) == 0)
                 {
                     m_CharacterResolvedCharacters[countResolvedCharacters++] = calculatedCharacter;
                     ++characterBatch.Length;

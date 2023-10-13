@@ -58,7 +58,7 @@ namespace TMPro.EditorUtilities
             k_SortingLayerNames = SortingLayerHelper.sortingLayerNames;
         }
 
-        protected override void DrawExtraSettingsMattish()
+        protected override void DrawExtraSettingsFastText()
         {
             Rect rect = EditorGUILayout.GetControlRect(false, 24);
 

@@ -9,11 +9,11 @@ namespace TMPro.EditorUtilities
 {
     public abstract class TMP_BaseEditorPanel : Editor
     {
-        public static bool TMP_HasMattishOptimizationsEnabled = false;
+        public static bool TMP_HasFastTextOptimizationsEnabled = false;
         
         //Labels and Tooltips
         static readonly GUIContent k_RtlToggleLabel = new GUIContent("Enable RTL Editor", "Reverses text direction and allows right to left editing.");
-        static readonly GUIContent k_MattishOptimizationToggleLabel = new GUIContent("Enable Mattish Optimizations", "Enable optimizations which perform faster layouts, but has reduced feature set.");
+        static readonly GUIContent k_FastTextOptimizationToggleLabel = new GUIContent("Enable FastText Optimizations", "Enable optimizations which perform faster layouts, but has reduced feature set.");
         //static readonly GUIContent k_MainSettingsLabel = new GUIContent("Main Settings");
         static readonly GUIContent k_FontAssetLabel = new GUIContent("Font Asset", "The Font Asset containing the glyphs that can be rendered for this text.");
         static readonly GUIContent k_MaterialPresetLabel = new GUIContent("Material Preset", "The material used for rendering. Only materials created from the Font Asset can be used.");
@@ -113,7 +113,7 @@ namespace TMPro.EditorUtilities
         protected GUIContent[] m_StyleNames;
         protected int m_StyleSelectionIndex;
         
-        protected SerializedProperty m_IsMattishOptimization;
+        protected SerializedProperty m_IsFastTextOptimization;
 
         protected SerializedProperty m_FontStyleProp;
 
@@ -193,7 +193,7 @@ namespace TMPro.EditorUtilities
 
         protected virtual void OnEnable()
         {
-            m_IsMattishOptimization = serializedObject.FindProperty("m_isMattishOptimization");
+            m_IsFastTextOptimization = serializedObject.FindProperty("m_isFastTextOptimization");
             
             m_TextProp = serializedObject.FindProperty("m_text");
             m_IsRightToLeftProp = serializedObject.FindProperty("m_isRightToLeft");
@@ -335,20 +335,20 @@ namespace TMPro.EditorUtilities
 
             serializedObject.Update();
 
-            if(m_IsMattishOptimization.boolValue)
+            if(m_IsFastTextOptimization.boolValue)
             {
-                TMP_HasMattishOptimizationsEnabled = true;
-                m_IsMattishOptimization.boolValue = EditorGUILayout.Toggle(k_MattishOptimizationToggleLabel, m_IsMattishOptimization.boolValue);
+                TMP_HasFastTextOptimizationsEnabled = true;
+                m_IsFastTextOptimization.boolValue = EditorGUILayout.Toggle(k_FastTextOptimizationToggleLabel, m_IsFastTextOptimization.boolValue);
                 
-                DrawTextInputMattish();
-                DrawMainSettingsMattish();
-                DrawExtraSettingsMattish();
+                DrawTextInputFastText();
+                DrawMainSettingsFastText();
+                DrawExtraSettingsFastText();
                 
-                TMP_HasMattishOptimizationsEnabled = false;
+                TMP_HasFastTextOptimizationsEnabled = false;
             }
             else
             {
-                m_IsMattishOptimization.boolValue = EditorGUILayout.Toggle(k_MattishOptimizationToggleLabel, m_IsMattishOptimization.boolValue);
+                m_IsFastTextOptimization.boolValue = EditorGUILayout.Toggle(k_FastTextOptimizationToggleLabel, m_IsFastTextOptimization.boolValue);
                 
                 DrawTextInput();
                 DrawMainSettings();
@@ -464,7 +464,7 @@ namespace TMPro.EditorUtilities
             }
         }
 
-        private void DrawTextInputMattish(){
+        private void DrawTextInputFastText(){
             EditorGUILayout.Space();
 
             Rect rect = EditorGUILayout.GetControlRect(false, 22);
@@ -488,15 +488,15 @@ namespace TMPro.EditorUtilities
             }
         }
 
-        private void DrawMainSettingsMattish()
+        private void DrawMainSettingsFastText()
         {
             GUILayout.Label(new GUIContent("<b>Main Settings</b>"), TMP_UIStyleManager.sectionHeader);
             
-            DrawFontMattish();
+            DrawFontFastText();
             
-            DrawColorMattish();
+            DrawColorFastText();
 
-            DrawAlignmentMattish();
+            DrawAlignmentFastText();
         }
         
         protected void DrawTextInput()
@@ -606,7 +606,7 @@ namespace TMPro.EditorUtilities
             //EditorGUI.indentLevel -= 1;
         }
         
-        private void DrawFontMattish()
+        private void DrawFontFastText()
         {
             bool isFontAssetDirty = false;
 
@@ -950,7 +950,7 @@ namespace TMPro.EditorUtilities
             EditorGUILayout.Space();
         }
 
-        void DrawColorMattish()
+        void DrawColorFastText()
         {
             // FACE VERTEX COLOR
             EditorGUI.BeginChangeCheck();
@@ -1259,7 +1259,7 @@ namespace TMPro.EditorUtilities
             EditorGUILayout.Space();
         }
 
-        void DrawAlignmentMattish()
+        void DrawAlignmentFastText()
         {
             // TEXT ALIGNMENT
             EditorGUI.BeginChangeCheck();
@@ -1402,7 +1402,7 @@ namespace TMPro.EditorUtilities
             EditorGUILayout.Space();
         }
 
-        protected abstract void DrawExtraSettingsMattish();
+        protected abstract void DrawExtraSettingsFastText();
 
         protected abstract void DrawExtraSettings();
 

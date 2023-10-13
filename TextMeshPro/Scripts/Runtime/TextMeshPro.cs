@@ -1453,7 +1453,7 @@ namespace TMPro
         // This function parses through the Char[] to determine how many characters will be visible. It then makes sure the arrays are large enough for all those characters.
         internal override int SetArraySizes(TextProcessingElement[] textProcessingArray)
         {
-            if(m_isMattishOptimization)
+            if(m_isFastTextOptimization)
             {
                 return -1; // We don't parse and assign separately
             }
@@ -2135,10 +2135,10 @@ namespace TMPro
                 // This is a revised implementation to remove the use of recursion which could potentially result in stack overflow issues.
                 while(m_IsAutoSizePointSizeSet == false)
                 {
-                    if(m_isMattishOptimization)
+                    if(m_isFastTextOptimization)
                     {
-                        PopulateTextProcessingArrayMattish();
-                        DoMattishCaseGenerateTextMesh();
+                        PopulateTextProcessingArrayFastText();
+                        DoFastTextCaseGenerateTextMesh();
                     }
                     else
                     {
@@ -2293,7 +2293,7 @@ namespace TMPro
                 m_textInfo.Clear();
 
             // Early exit if we don't have any Text to generate.
-            if ((m_TextProcessingArray == null || m_TextProcessingArray.Length == 0 || m_TextProcessingArray[0].unicode == 0) && ! m_isMattishOptimization)
+            if ((m_TextProcessingArray == null || m_TextProcessingArray.Length == 0 || m_TextProcessingArray[0].unicode == 0) && ! m_isFastTextOptimization)
             {
                 // Clear mesh and upload changes to the mesh.
                 ClearMesh(true);

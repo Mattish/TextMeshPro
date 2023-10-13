@@ -14,9 +14,9 @@ namespace TMPro
         // TODO: these should be checked against and sized accordingly to stop over running.
         // As we do pointer stuff with these, if we overrun the editor/game is going to blow up randomly and confusingly.
         private static TMP_MeshVertex[] vertsBuffer = new TMP_MeshVertex[1024 * 4];
-        private static MattishCaseLineInfo[] mattishCaseLineInfos = new MattishCaseLineInfo[256];
+        private static FastTextCaseLineInfo[] fastTextCaseLineInfos = new FastTextCaseLineInfo[256];
         
-        public unsafe void DoMattishCaseGenerateTextMesh()
+        public unsafe void DoFastTextCaseGenerateTextMesh()
         {
             var ot1 = OperationTimingTarget.Start();
             
@@ -43,11 +43,9 @@ namespace TMPro
             Span<int> materialIndexToCharCount = stackalloc int[16];
             Span<Color32> quadColors = stackalloc Color32[4];
             
-            //Span<MattishCaseLineInfo> mattishCaseLineInfos = stackalloc MattishCaseLineInfo[256];
-            
             int lineInfoCount = 0;
             
-            ref MattishCaseLineInfo currentLine = ref mattishCaseLineInfos[0];
+            ref FastTextCaseLineInfo currentLine = ref fastTextCaseLineInfos[0];
             currentLine.Length = 0;
             currentLine.LineYOffset = 0;
             currentLine.TotalWidth = 0;
@@ -71,8 +69,8 @@ namespace TMPro
 
                 for(int batchIndex = 0; batchIndex < m_CharacterBatchCount; ++batchIndex)
                 {
-                    ref MattishCharacterBatch batch = ref m_CharacterBatches[batchIndex];
-                    if((batch.BatchTypeFlag & MattishBatchTypeFlag.Material) != 0 && batch.AtlasIndex != byte.MaxValue)
+                    ref FastTextCharacterBatch batch = ref m_CharacterBatches[batchIndex];
+                    if((batch.BatchTypeFlag & FastTextBatchTypeFlag.Material) != 0 && batch.AtlasIndex != byte.MaxValue)
                     {
                         Material targetMaterial = batch.AtlasIndex > 0
                             ? TMP_MaterialManager.GetFallbackMaterial(m_currentFontAsset, m_currentMaterial, batch.AtlasIndex)
@@ -97,11 +95,11 @@ namespace TMPro
                     currentLine.Length += batch.Length;
                     totalCharacterCount += batch.Length;
                     // If this batch is a line, then commit the calculated line details
-                    if((batch.BatchTypeFlag & MattishBatchTypeFlag.LineBreak) != 0)
+                    if((batch.BatchTypeFlag & FastTextBatchTypeFlag.LineBreak) != 0)
                     {
                         currentLine.TotalWidth = calcPosBurstParams.x * adjustedScale;
                         calcPosBurstParams.x = 0;
-                        currentLine = ref mattishCaseLineInfos[lineInfoCount + 1];
+                        currentLine = ref fastTextCaseLineInfos[lineInfoCount + 1];
                         currentLine.LineYOffset = lineHeight * (lineInfoCount + 1);
                         currentLine.Length = 0;
                         currentLine.TotalWidth = 0;
@@ -117,7 +115,7 @@ namespace TMPro
 
                 // Finalise this line
                 currentLine.TotalWidth = calcPosBurstParams.x * adjustedScale;
-                mattishCaseLineInfos[lineInfoCount++] = currentLine;
+                fastTextCaseLineInfos[lineInfoCount++] = currentLine;
 
                 //TODO:
                 if(m_characterCount == 0)
@@ -229,21 +227,21 @@ namespace TMPro
                     case HorizontalAlignmentOptions.Left:
                         for(var i = 0; i < lineInfoCount; i++)
                         {
-                            mattishCaseLineInfos[i].CalculatedAlignmentJustificationOffset.x = rect.xMin;
+                            fastTextCaseLineInfos[i].CalculatedAlignmentJustificationOffset.x = rect.xMin;
                         }
                         break;
                     case HorizontalAlignmentOptions.Center:
                         // Center alignment depends on the total length of each line to center based on content and the size of the text rect
                         for(var i = 0; i < lineInfoCount; i++)
                         {
-                            mattishCaseLineInfos[i].CalculatedAlignmentJustificationOffset.x = -mattishCaseLineInfos[i].TotalWidth * 0.5f;
+                            fastTextCaseLineInfos[i].CalculatedAlignmentJustificationOffset.x = -fastTextCaseLineInfos[i].TotalWidth * 0.5f;
                         }
                         break;
                     case HorizontalAlignmentOptions.Right:
                         // Right alignment depends on the total length of each line, and may require negative offset if the line overflows
                         for(var i = 0; i < lineInfoCount; i++)
                         {
-                            mattishCaseLineInfos[i].CalculatedAlignmentJustificationOffset.x = rect.xMax - mattishCaseLineInfos[i].TotalWidth;
+                            fastTextCaseLineInfos[i].CalculatedAlignmentJustificationOffset.x = rect.xMax - fastTextCaseLineInfos[i].TotalWidth;
                         }
                         break;
                     case HorizontalAlignmentOptions.Justified:
@@ -262,7 +260,7 @@ namespace TMPro
                         // Shift down from first line BL, then shift up based on rect height
                         for(var i = 0; i < lineInfoCount; i++)
                         {
-                            mattishCaseLineInfos[i].CalculatedAlignmentJustificationOffset.y = (elementAscentLine - rect.yMax);
+                            fastTextCaseLineInfos[i].CalculatedAlignmentJustificationOffset.y = (elementAscentLine - rect.yMax);
                         }
                         break;
                     case VerticalAlignmentOptions.Middle:
@@ -271,17 +269,17 @@ namespace TMPro
                         float totalHeightOfAllLines = ((lineInfoCount * -lineHeight) * 0.5f) + elementAscentLine;
                         for(var i = 0; i < lineInfoCount; i++)
                         {
-                            mattishCaseLineInfos[i].CalculatedAlignmentJustificationOffset.y = (totalHeightOfAllLines);
+                            fastTextCaseLineInfos[i].CalculatedAlignmentJustificationOffset.y = (totalHeightOfAllLines);
                         }
 
                         break;
                     case VerticalAlignmentOptions.Bottom:
                         // Shift down from last line BL
-                        ref MattishCaseLineInfo lastLineInfo = ref mattishCaseLineInfos[lineInfoCount - 1];
+                        ref FastTextCaseLineInfo lastLineInfo = ref fastTextCaseLineInfos[lineInfoCount - 1];
                         
                         for(var i = 0; i < lineInfoCount; i++)
                         {
-                            mattishCaseLineInfos[i].CalculatedAlignmentJustificationOffset.y = -rect.yMin - lastLineInfo.LineYOffset + elementDescentLine;
+                            fastTextCaseLineInfos[i].CalculatedAlignmentJustificationOffset.y = -rect.yMin - lastLineInfo.LineYOffset + elementDescentLine;
                         }
                         break;
                     case VerticalAlignmentOptions.Baseline:
@@ -299,7 +297,7 @@ namespace TMPro
                 // This is likely going to be the case for roman alphabets and numbers
                 if(m_currentMaterialIndex == 0)
                 {
-                    fixed(MattishCaseLineInfo* lines = mattishCaseLineInfos)
+                    fixed(FastTextCaseLineInfo* lines = fastTextCaseLineInfos)
                     {
                         TextMeshProBurst.BurstCompiled_OffsetQuadPositionFull(in verts,in lines, lineInfoCount);
                     }
@@ -314,7 +312,7 @@ namespace TMPro
                     //
                     //     characterProgress = ref CalculatedCharacterDetails[i];
                     //
-                    //     MattishCaseLineInfo lineInfo = mattishCaseLineInfos[characterProgress.CalculatedLineNumber];
+                    //     FastTextCaseLineInfo lineInfo = fastTextCaseLineInfos[characterProgress.CalculatedLineNumber];
                     //     Vector3 offset = new(lineInfo.CalculatedAlignmentJustificationOffset.x, -(lineInfo.LineYOffset + lineInfo.CalculatedAlignmentJustificationOffset.y), 0);
                     //
                     //     ref var meshInfo = ref m_textInfo.meshInfo[characterProgress.MaterialReferenceIndex];

@@ -2408,13 +2408,13 @@ namespace TMPro
             PopulateTextProcessingArray();
 
             m_inputSource = currentInputSource;
-            // Mattish pre-processing
-            if(m_isMattishOptimization)
+            // FastText pre-processing
+            if(m_isFastTextOptimization)
             {
 #if UNITY_EDITOR
                 m_text = sourceText;
 #endif
-                PopulateTextProcessingArrayMattish();
+                PopulateTextProcessingArrayFastText();
             }
         }
 
@@ -2444,10 +2444,10 @@ namespace TMPro
             SetVerticesDirty();
             SetLayoutDirty();
             
-            // Mattish pre-processing
-            if(m_isMattishOptimization)
+            // FastText pre-processing
+            if(m_isFastTextOptimization)
             {
-                PopulateTextProcessingArrayMattish();
+                PopulateTextProcessingArrayFastText();
             }
         }
 
@@ -2778,10 +2778,10 @@ namespace TMPro
 
             SetVerticesDirty();
             SetLayoutDirty();
-            // Mattish pre-processing
-            if(m_isMattishOptimization)
+            // FastText pre-processing
+            if(m_isFastTextOptimization)
             {
-                PopulateTextProcessingArrayMattish();
+                PopulateTextProcessingArrayFastText();
             }
         }
 
@@ -2846,10 +2846,10 @@ namespace TMPro
 
             SetVerticesDirty();
             SetLayoutDirty();
-             // Mattish pre-processing
-            if(m_isMattishOptimization)
+             // FastText pre-processing
+            if(m_isFastTextOptimization)
             { 
-                PopulateTextProcessingArrayMattish();
+                PopulateTextProcessingArrayFastText();
             }
         }
 
