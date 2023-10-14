@@ -27,9 +27,9 @@ namespace TMPro
         [Flags]
         internal enum FastTextBatchTypeFlag
         {
-            None,
-            LineBreak,
-            Material
+            None = 0,
+            LineBreak = 1 << 0,
+            Material = 1 << 1
         }
     
         internal struct FastTextCharacterBatch
@@ -69,20 +69,20 @@ namespace TMPro
             
             //TODO: cache this value elsewhere rather then every call
             uint missingCharacterUnicode = (uint)TMP_Settings.missingGlyphCharacter == 0 ? 9633 : (uint)TMP_Settings.missingGlyphCharacter;
-
+            ref TMP_CacheCalculatedCharacter missingCalculatedCharacter = ref TMP_FontAssetUtilities.TryGetCharacterFromFontAsset_DirectRef(missingCharacterUnicode, m_fontAsset, out _);
             int countResolvedCharacters = 0;
-            uint nextCharacter = m_TextBackingArray[0];
+            uint nextCharacter = m_TextBackingArray.Text[0];
             for(int i = 0; i < srcLength - 1; ++i)
             {
                 uint unicode = nextCharacter;
-                nextCharacter = m_TextBackingArray[i + 1];
+                nextCharacter = m_TextBackingArray.Text[i + 1];
                 ref TMP_CacheCalculatedCharacter calculatedCharacter = ref TMP_FontAssetUtilities.TryGetCharacterFromFontAsset_DirectRef(unicode, m_fontAsset, out bool found);
                 if(!found)
                 {
                     //TODO: ?
                     //DoMissingGlyphCallback((int)unicode, textProcessingArray[i].stringIndex, m_currentFontAsset);
                     unicode = missingCharacterUnicode;
-                    calculatedCharacter = ref TMP_FontAssetUtilities.TryGetCharacterFromFontAsset_DirectRef(unicode, m_fontAsset, out found);
+                    calculatedCharacter = ref missingCalculatedCharacter;
                     // If we don't have a missing glyph character here, we're donezo
                 }
                 unchecked
@@ -131,7 +131,13 @@ namespace TMPro
                 // Only populate resolved characters if it's not a linebreak
                 if((resultingFlag & FastTextBatchTypeFlag.LineBreak) == 0)
                 {
-                    m_CharacterResolvedCharacters[countResolvedCharacters++] = calculatedCharacter;
+                    ref TMP_CacheCalculatedCharacter target = ref m_CharacterResolvedCharacters[countResolvedCharacters++];
+                    target.GlyphMetrics4 = calculatedCharacter.GlyphMetrics4;
+                    target.GlyphBox = calculatedCharacter.GlyphBox;
+                    target.GlyphHorizontalAdvance = calculatedCharacter.GlyphHorizontalAdvance;
+                    target.AtlasIndex = calculatedCharacter.AtlasIndex;
+                    target.uvAtlasReciprocal = calculatedCharacter.uvAtlasReciprocal;
+
                     ++characterBatch.Length;
                 }
 
@@ -139,14 +145,14 @@ namespace TMPro
 
             // Process now the final character
             {
-                uint unicode = m_TextBackingArray[srcLength - 1];
+                uint unicode = m_TextBackingArray.Text[srcLength - 1];
                 ref TMP_CacheCalculatedCharacter calculatedCharacter = ref TMP_FontAssetUtilities.TryGetCharacterFromFontAsset_DirectRef(unicode, m_fontAsset, out bool found);
                 if(!found)
                 {
                     //TODO: ?
                     //DoMissingGlyphCallback((int)unicode, textProcessingArray[i].stringIndex, m_currentFontAsset);
-                    unicode = (uint)TMP_Settings.missingGlyphCharacter == 0 ? 9633 : (uint)TMP_Settings.missingGlyphCharacter;
-                    calculatedCharacter = ref TMP_FontAssetUtilities.TryGetCharacterFromFontAsset_DirectRef(unicode, m_fontAsset, out found);
+                    unicode = missingCharacterUnicode;
+                    calculatedCharacter = ref missingCalculatedCharacter;
                     // If we don't have a missing glyph character here, we're donezo
                 }
 
