@@ -89,7 +89,8 @@ namespace TMPro
                         in srcColors,
                         adjustedScale,
                         xScale,
-                        normalSpacingCharacterSpacingOffset
+                        normalSpacingCharacterSpacingOffset,
+                        m_padding
                     );
 
                     materialIndexToCharCount[m_currentMaterialIndex] += batch.Length;

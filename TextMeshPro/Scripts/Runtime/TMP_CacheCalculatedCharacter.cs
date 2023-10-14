@@ -12,6 +12,7 @@ namespace TMPro
         public float4 GlyphBox;
         public float GlyphHorizontalAdvance;
         public int AtlasIndex;
+        public float uvAtlasReciprocal;
 
         public static TMP_CacheCalculatedCharacter Calcuate(Glyph glyph, float atlasDimensionSize)
         {
@@ -28,7 +29,8 @@ namespace TMPro
                     (glyphGlyphRect.x + glyphGlyphRect.width) * uvAtlasReciprocal, 
                     (glyphGlyphRect.y + glyphGlyphRect.height) * uvAtlasReciprocal
                 ),
-                AtlasIndex = glyph.atlasIndex
+                AtlasIndex = glyph.atlasIndex,
+                uvAtlasReciprocal = uvAtlasReciprocal
             };
         }
     }
