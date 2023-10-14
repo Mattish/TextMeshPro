@@ -2414,7 +2414,6 @@ namespace TMPro
 #if UNITY_EDITOR
                 m_text = sourceText;
 #endif
-                PopulateTextProcessingArrayFastText();
             }
         }
 
@@ -2443,12 +2442,6 @@ namespace TMPro
 
             SetVerticesDirty();
             SetLayoutDirty();
-            
-            // FastText pre-processing
-            if(m_isFastTextOptimization)
-            {
-                PopulateTextProcessingArrayFastText();
-            }
         }
 
         /// <summary>
@@ -2778,11 +2771,6 @@ namespace TMPro
 
             SetVerticesDirty();
             SetLayoutDirty();
-            // FastText pre-processing
-            if(m_isFastTextOptimization)
-            {
-                PopulateTextProcessingArrayFastText();
-            }
         }
 
         /// <summary>
@@ -2846,11 +2834,6 @@ namespace TMPro
 
             SetVerticesDirty();
             SetLayoutDirty();
-             // FastText pre-processing
-            if(m_isFastTextOptimization)
-            { 
-                PopulateTextProcessingArrayFastText();
-            }
         }
 
         /// <summary>

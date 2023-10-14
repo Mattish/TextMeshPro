@@ -62,6 +62,18 @@ namespace TMPro.Collections
             ref (long Key, long Hash, TValue Value) value = ref buffer[targetOffset];
             return ref value.Value;
         }
+        
+        public ref TValue TryGet(long key, long hash, out bool success)
+        {
+            long index = HashToIndex(hash, longLengthMinusOne);
+            long targetOffset = index;
+            long targetMaxTarget = index + probeMax;
+            for(; targetOffset < targetMaxTarget && buffer[(int)targetOffset].Key != key; targetOffset++) { }
+            success = targetOffset < targetMaxTarget;
+            
+            ref (long Key, long Hash, TValue Value) value = ref buffer[targetOffset];
+            return ref value.Value;
+        }
 
         public bool Contains(long key)
         {
@@ -79,7 +91,7 @@ namespace TMPro.Collections
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private void InternalAdd(long key, long hash, TValue value){
+        private bool InternalAdd(long key, long hash, TValue value){
             start:
             long index = HashToIndex(hash, longLengthMinusOne);
             long distance = 0;
@@ -89,7 +101,12 @@ namespace TMPro.Collections
                 {
                     buffer[index].Key = key;
                     buffer[index].Value = value;
-                    return;
+                    return true;
+                }
+                if (buffer[index].Key == key)
+                {
+                    buffer[index].Value = value;
+                    return false;
                 }
                 long desired = HashToIndex(buffer[index].Key, longLengthMinusOne);
                 long currentDistance = (index + buffer.LongLength - desired);
@@ -125,7 +142,7 @@ namespace TMPro.Collections
             {
                 if (oldBuffer[i].Key != long.MaxValue)
                 {
-                    InternalAdd(oldBuffer[i].Key, Squirrel3(oldBuffer[i].Key), oldBuffer[i].Value);
+                    InternalAdd(oldBuffer[i].Key, oldBuffer[i].Hash, oldBuffer[i].Value);
                 }
             }
         }
@@ -138,8 +155,19 @@ namespace TMPro.Collections
             }
                 
             long hash = Squirrel3(key);
-            InternalAdd(key, hash, value);
-            fillCount++;
+            if(InternalAdd(key, hash, value)){
+                fillCount++;
+            }
+        }
+
+        public void Add(long key, long hash, TValue value){
+            if (fillCount > resizeThreshold)
+            {
+                Resize();
+            }
+            if(InternalAdd(key, hash, value)){
+                fillCount++;
+            }
         }
 
         public long Length()

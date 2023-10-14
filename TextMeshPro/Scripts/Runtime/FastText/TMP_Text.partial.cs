@@ -60,7 +60,16 @@ namespace TMPro
             {
                 return;
             }
+#if UNITY_EDITOR
+            // This is required due to moving from play/edit
+            if(m_fontAsset.m_CachedCalculatedCharacterLookup == null){
+                m_fontAsset.ReadFontAssetDefinition();
+            }
+#endif
             
+            //TODO: cache this value elsewhere rather then every call
+            uint missingCharacterUnicode = (uint)TMP_Settings.missingGlyphCharacter == 0 ? 9633 : (uint)TMP_Settings.missingGlyphCharacter;
+
             int countResolvedCharacters = 0;
             uint nextCharacter = m_TextBackingArray[0];
             for(int i = 0; i < srcLength - 1; ++i)
@@ -72,7 +81,7 @@ namespace TMPro
                 {
                     //TODO: ?
                     //DoMissingGlyphCallback((int)unicode, textProcessingArray[i].stringIndex, m_currentFontAsset);
-                    unicode = (uint)TMP_Settings.missingGlyphCharacter == 0 ? 9633 : (uint)TMP_Settings.missingGlyphCharacter;
+                    unicode = missingCharacterUnicode;
                     calculatedCharacter = ref TMP_FontAssetUtilities.TryGetCharacterFromFontAsset_DirectRef(unicode, m_fontAsset, out found);
                     // If we don't have a missing glyph character here, we're donezo
                 }

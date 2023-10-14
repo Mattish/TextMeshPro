@@ -27,6 +27,15 @@ namespace TMPro
         public float2 TextCoord1;
     }
 
+    [StructLayout(LayoutKind.Explicit)]
+    public struct TMP_MeshVertexStream2
+    {
+        [FieldOffset(0)]
+        public float3 Normal;
+        [FieldOffset(12)]
+        public float4 Tangent;
+    }
+
     /// <summary>
     /// Structure which contains the vertex attributes (geometry) of the text object.
     /// </summary>
@@ -44,8 +53,8 @@ namespace TMPro
         
         
         private static readonly Color32 s_DefaultColor = new Color32(byte.MaxValue, byte.MaxValue, byte.MaxValue, byte.MaxValue);
-        private static readonly Vector3 s_DefaultNormal = new Vector3(0.0f, 0.0f, -1f);
-        private static readonly Vector4 s_DefaultTangent = new Vector4(-1f, 0.0f, 0.0f, 1f);
+        public static readonly Vector3 s_DefaultNormal = new Vector3(0.0f, 0.0f, -1f);
+        public static readonly Vector4 s_DefaultTangent = new Vector4(-1f, 0.0f, 0.0f, 1f);
         private static readonly Bounds s_DefaultBounds = new Bounds();
 
         public Mesh mesh;

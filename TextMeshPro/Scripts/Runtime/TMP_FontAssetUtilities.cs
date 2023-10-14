@@ -59,7 +59,7 @@ namespace TMPro
 
         public static bool TryGetCharacterFromFontAsset_Direct(uint unicode, TMP_FontAsset sourceFontAsset, out TMP_CacheCalculatedCharacter calculatedCharacter)
         {
-            ref TMP_CacheCalculatedCharacter foundCharacter = ref sourceFontAsset.m_CachedCalculatedCharacterLookup.TryGet(unicode, out bool found);
+            ref TMP_CacheCalculatedCharacter foundCharacter = ref sourceFontAsset.m_CachedCalculatedCharacterLookup.TryGet(unicode, unicode, out bool found);
             if (found)
             {
                 calculatedCharacter = foundCharacter;
@@ -70,7 +70,7 @@ namespace TMPro
             {
                 if(sourceFontAsset.TryAddCharacterInternal(unicode, out TMP_Character character))
                 {
-                    foundCharacter = ref sourceFontAsset.m_CachedCalculatedCharacterLookup.TryGet(unicode, out found);
+                    foundCharacter = ref sourceFontAsset.m_CachedCalculatedCharacterLookup.TryGet(unicode, unicode, out found);
                     calculatedCharacter = foundCharacter;
                     return true;
                 }
@@ -82,7 +82,7 @@ namespace TMPro
 
         public static bool TryGetCharacterFromFontAsset_DirectRef(uint unicode, TMP_FontAsset sourceFontAsset, ref TMP_CacheCalculatedCharacter calculatedCharacter)
         {
-            calculatedCharacter = sourceFontAsset.m_CachedCalculatedCharacterLookup.TryGet(unicode, out bool found);
+            calculatedCharacter = sourceFontAsset.m_CachedCalculatedCharacterLookup.TryGet(unicode, unicode, out bool found);
             if (found)
             {
                 return true;
@@ -92,7 +92,7 @@ namespace TMPro
             {
                 if(sourceFontAsset.TryAddCharacterInternal(unicode, out TMP_Character character))
                 {
-                    calculatedCharacter = sourceFontAsset.m_CachedCalculatedCharacterLookup.TryGet(unicode, out found);
+                    calculatedCharacter = sourceFontAsset.m_CachedCalculatedCharacterLookup.TryGet(unicode, unicode, out found);
                     return true;
                 }
             }
@@ -103,12 +103,7 @@ namespace TMPro
 
         public static ref TMP_CacheCalculatedCharacter TryGetCharacterFromFontAsset_DirectRef(uint unicode, TMP_FontAsset sourceFontAsset, out bool success)
         {
-            if(unicode < 256)
-            {
-                success = true;
-                return ref sourceFontAsset.m_AsciiCachedCalculatedCharacterLookup[(int)unicode];
-            }
-            ref TMP_CacheCalculatedCharacter calculatedCharacter = ref sourceFontAsset.m_CachedCalculatedCharacterLookup.TryGet(unicode, out success);
+            ref TMP_CacheCalculatedCharacter calculatedCharacter = ref sourceFontAsset.m_CachedCalculatedCharacterLookup.TryGet(unicode, unicode, out success);
             if (success)
             {
                 return ref calculatedCharacter;
@@ -118,7 +113,7 @@ namespace TMPro
             {
                 if(sourceFontAsset.TryAddCharacterInternal(unicode, out TMP_Character character))
                 {
-                    calculatedCharacter = ref sourceFontAsset.m_CachedCalculatedCharacterLookup.TryGet(unicode, out success);
+                    calculatedCharacter = ref sourceFontAsset.m_CachedCalculatedCharacterLookup.TryGet(unicode, unicode, out success);
                 }
             }
             return ref calculatedCharacter;

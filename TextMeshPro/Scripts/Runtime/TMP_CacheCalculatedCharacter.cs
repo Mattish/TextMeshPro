@@ -21,7 +21,7 @@ namespace TMPro
             float uvAtlasReciprocal = 1.0f / atlasDimensionSize;
             return new TMP_CacheCalculatedCharacter
             {
-                GlyphMetrics4 = new(glyphMetrics.horizontalBearingX, glyphMetrics.width, 0, glyphMetrics.horizontalBearingY),
+                GlyphMetrics4 = new(glyphMetrics.horizontalBearingX, glyphMetrics.width, glyphMetrics.horizontalBearingY - glyphMetrics.height, glyphMetrics.horizontalBearingY),
                 GlyphHorizontalAdvance = glyphMetrics.horizontalAdvance,
                 GlyphBox = new (glyphGlyphRect.x * uvAtlasReciprocal, 
                     glyphGlyphRect.y * uvAtlasReciprocal, 
