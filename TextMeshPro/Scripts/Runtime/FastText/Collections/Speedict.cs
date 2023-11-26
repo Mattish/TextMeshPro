@@ -19,9 +19,9 @@ namespace TMPro.Collections
             buffer = new (long, long, TValue)[targetLength + probeMax];
             resizeThreshold = (int)(buffer.Length * 0.5);
             longLengthMinusOne = targetLength - 1;
-            Array.Fill(buffer, (long.MaxValue,long.MaxValue, default));
+            Array.Fill(buffer, (long.MaxValue, long.MaxValue, default));
         }
-        
+
         //https://stackoverflow.com/questions/8970101/whats-the-quickest-way-to-compute-log2-of-an-integer-in-c
         // BitOperations.Log2 is very recent implementation and not available on more recent platforms 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -35,7 +35,7 @@ namespace TMPro.Collections
         {
             return hash & lengthMinusOne;
         }
-        
+
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private long Squirrel3(long at)
         {
@@ -58,11 +58,11 @@ namespace TMPro.Collections
             long targetMaxTarget = index + probeMax;
             for(; targetOffset < targetMaxTarget && buffer[(int)targetOffset].Key != key; targetOffset++) { }
             success = targetOffset < targetMaxTarget;
-            
+
             ref (long Key, long Hash, TValue Value) value = ref buffer[targetOffset];
             return ref value.Value;
         }
-        
+
         public ref TValue TryGet(long key, long hash, out bool success)
         {
             long index = HashToIndex(hash, longLengthMinusOne);
@@ -70,7 +70,7 @@ namespace TMPro.Collections
             long targetMaxTarget = index + probeMax;
             for(; targetOffset < targetMaxTarget && buffer[(int)targetOffset].Key != key; targetOffset++) { }
             success = targetOffset < targetMaxTarget;
-            
+
             ref (long Key, long Hash, TValue Value) value = ref buffer[targetOffset];
             return ref value.Value;
         }
@@ -91,26 +91,27 @@ namespace TMPro.Collections
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private bool InternalAdd(long key, long hash, TValue value){
-            start:
+        private bool InternalAdd(long key, long hash, TValue value)
+        {
+start:
             long index = HashToIndex(hash, longLengthMinusOne);
             long distance = 0;
-            while (true)
+            while(true)
             {
-                if (buffer[index].Key == long.MaxValue)
+                if(buffer[index].Key == long.MaxValue)
                 {
                     buffer[index].Key = key;
                     buffer[index].Value = value;
                     return true;
                 }
-                if (buffer[index].Key == key)
+                if(buffer[index].Key == key)
                 {
                     buffer[index].Value = value;
                     return false;
                 }
                 long desired = HashToIndex(buffer[index].Key, longLengthMinusOne);
                 long currentDistance = (index + buffer.LongLength - desired);
-                if (currentDistance < distance)
+                if(currentDistance < distance)
                 {
                     Swap(ref key, ref buffer[index].Key);
                     Swap(ref value, ref buffer[index].Value);
@@ -123,49 +124,53 @@ namespace TMPro.Collections
                     Resize();
                     goto start;
                 }
-                index = (index + 1);
+                ++index;
             }
         }
-        
-        private void Resize(){
+
+        private void Resize()
+        {
             long newSize = (longLengthMinusOne + 1) * 2;
-            
+
             var oldBuffer = buffer;
             resizeThreshold = (int)(newSize * 0.5);
             probeMax = BitwiseLog2((int)newSize);
             buffer = new (long, long, TValue)[(int)(newSize + probeMax)];
             longLengthMinusOne = newSize - 1;
             Array.Fill(buffer, (long.MaxValue, long.MaxValue, default));
-            
+
             // Create a new buffer, re-add all the existing values. Have to interate through due to potential replacement
-            for (int i = 0; i < oldBuffer.Length; i++)
+            for(int i = 0; i < oldBuffer.Length; i++)
             {
-                if (oldBuffer[i].Key != long.MaxValue)
+                if(oldBuffer[i].Key != long.MaxValue)
                 {
                     InternalAdd(oldBuffer[i].Key, oldBuffer[i].Hash, oldBuffer[i].Value);
                 }
             }
         }
-        
+
         public void Add(long key, TValue value)
         {
-            if (fillCount > resizeThreshold)
+            if(fillCount > resizeThreshold)
             {
                 Resize();
             }
-                
+
             long hash = Squirrel3(key);
-            if(InternalAdd(key, hash, value)){
+            if(InternalAdd(key, hash, value))
+            {
                 fillCount++;
             }
         }
 
-        public void Add(long key, long hash, TValue value){
-            if (fillCount > resizeThreshold)
+        public void Add(long key, long hash, TValue value)
+        {
+            if(fillCount > resizeThreshold)
             {
                 Resize();
             }
-            if(InternalAdd(key, hash, value)){
+            if(InternalAdd(key, hash, value))
+            {
                 fillCount++;
             }
         }

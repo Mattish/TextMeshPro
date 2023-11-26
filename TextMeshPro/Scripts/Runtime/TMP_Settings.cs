@@ -18,7 +18,8 @@ namespace TMPro
     //    RelativeToCurrent   = 0x2,
     //}
 
-    [System.Serializable][ExcludeFromPresetAttribute]
+    [System.Serializable]
+    [ExcludeFromPresetAttribute]
     public class TMP_Settings : ScriptableObject
     {
         private static TMP_Settings s_Instance;
@@ -60,7 +61,7 @@ namespace TMPro
         {
             get
             {
-                if (instance.m_ActiveFontFeatures != null)
+                if(instance.m_ActiveFontFeatures != null)
                     return instance.m_ActiveFontFeatures.Contains(OTL_FeatureTag.kern);
 
                 return instance.m_enableKerning;
@@ -406,7 +407,7 @@ namespace TMPro
         {
             get
             {
-                if (instance.m_linebreakingRules == null)
+                if(instance.m_linebreakingRules == null)
                     LoadLinebreakingRules();
 
                 return instance.m_linebreakingRules;
@@ -449,25 +450,25 @@ namespace TMPro
         {
             get
             {
-                if (isTMPSettingsNull)
+                if(isTMPSettingsNull)
                 {
                     s_Instance = Resources.Load<TMP_Settings>("TMP Settings");
 
-                    #if UNITY_EDITOR
+#if UNITY_EDITOR
                     // Make sure TextMesh Pro UPM packages resources have been added to the user project
-                    if (isTMPSettingsNull && Time.frameCount != 0 || (!isTMPSettingsNull && s_Instance.assetVersion != s_CurrentAssetVersion))
+                    if(isTMPSettingsNull && Time.frameCount != 0 || (!isTMPSettingsNull && s_Instance.assetVersion != s_CurrentAssetVersion))
                     {
-						// It needs to open after loading the default Editor layout
+                        // It needs to open after loading the default Editor layout
                         DelayShowPackageImporterWindow();
                     }
-                    #endif
+#endif
 
                     // Convert use of the "enableKerning" property to the new "fontFeature" property.
-                    if (!isTMPSettingsNull && s_Instance.m_ActiveFontFeatures.Count == 1 && s_Instance.m_ActiveFontFeatures[0] == 0)
+                    if(!isTMPSettingsNull && s_Instance.m_ActiveFontFeatures.Count == 1 && s_Instance.m_ActiveFontFeatures[0] == 0)
                     {
                         s_Instance.m_ActiveFontFeatures.Clear();
 
-                        if (s_Instance.m_enableKerning)
+                        if(s_Instance.m_enableKerning)
                             s_Instance.m_ActiveFontFeatures.Add(OTL_FeatureTag.kern);
                     }
                 }
@@ -478,7 +479,7 @@ namespace TMPro
 
         internal static bool isTMPSettingsNull
         {
-            get { return s_Instance == null; }
+            get { return ReferenceEquals(s_Instance, null); }
         }
 
 #if UNITY_EDITOR
@@ -496,11 +497,11 @@ namespace TMPro
         /// <returns></returns>
         public static TMP_Settings LoadDefaultSettings()
         {
-            if (s_Instance == null)
+            if(s_Instance == null)
             {
                 // Load settings from TMP_Settings file
                 TMP_Settings settings = Resources.Load<TMP_Settings>("TMP Settings");
-                if (settings != null)
+                if(settings != null)
                     s_Instance = settings;
             }
 
@@ -514,7 +515,7 @@ namespace TMPro
         /// <returns></returns>
         public static TMP_Settings GetSettings()
         {
-            if (TMP_Settings.instance == null) return null;
+            if(TMP_Settings.instance == null) return null;
 
             return TMP_Settings.instance;
         }
@@ -526,7 +527,7 @@ namespace TMPro
         /// <returns></returns>
         public static TMP_FontAsset GetFontAsset()
         {
-            if (TMP_Settings.instance == null) return null;
+            if(TMP_Settings.instance == null) return null;
 
             return TMP_Settings.instance.m_defaultFontAsset;
         }
@@ -538,7 +539,7 @@ namespace TMPro
         /// <returns></returns>
         public static TMP_SpriteAsset GetSpriteAsset()
         {
-            if (TMP_Settings.instance == null) return null;
+            if(TMP_Settings.instance == null) return null;
 
             return TMP_Settings.instance.m_defaultSpriteAsset;
         }
@@ -550,7 +551,7 @@ namespace TMPro
         /// <returns></returns>
         public static TMP_StyleSheet GetStyleSheet()
         {
-            if (TMP_Settings.instance == null) return null;
+            if(TMP_Settings.instance == null) return null;
 
             return TMP_Settings.instance.m_defaultStyleSheet;
         }
@@ -560,9 +561,9 @@ namespace TMPro
         {
             //Debug.Log("Loading Line Breaking Rules for Asian Languages.");
 
-            if (instance == null) return;
+            if(instance == null) return;
 
-            if (s_Instance.m_linebreakingRules == null)
+            if(s_Instance.m_linebreakingRules == null)
                 s_Instance.m_linebreakingRules = new LineBreakingTable();
 
             s_Instance.m_linebreakingRules.leadingCharacters = GetCharacters(s_Instance.m_leadingCharacters);
@@ -580,7 +581,7 @@ namespace TMPro
             HashSet<uint> dict = new HashSet<uint>();
             string text = file.text;
 
-            for (int i = 0; i < text.Length; i++)
+            for(int i = 0; i < text.Length; i++)
             {
                 dict.Add(text[i]);
             }
