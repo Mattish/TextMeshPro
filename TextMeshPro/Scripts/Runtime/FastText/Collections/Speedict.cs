@@ -101,6 +101,7 @@ start:
                 if(buffer[index].Key == long.MaxValue)
                 {
                     buffer[index].Key = key;
+                    buffer[index].Hash = hash;
                     buffer[index].Value = value;
                     return true;
                 }
@@ -114,6 +115,7 @@ start:
                 if(currentDistance < distance)
                 {
                     Swap(ref key, ref buffer[index].Key);
+                    Swap(ref hash, ref buffer[index].Hash);
                     Swap(ref value, ref buffer[index].Value);
                     distance = currentDistance;
                 }
