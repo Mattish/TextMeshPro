@@ -487,7 +487,7 @@ namespace TMPro
         /// </summary>
         public override void UpdateMeshPadding()
         {
-            m_padding = ShaderUtilities.GetPadding(m_sharedMaterial, m_enableExtraPadding, m_isUsingBold);
+            m_padding = ShaderUtilities.GetPadding(m_sharedMaterial, m_enableExtraPadding);
             m_isMaskingEnabled = ShaderUtilities.IsMaskingEnabled(m_sharedMaterial);
             m_havePropertiesChanged = true;
             checkPaddingRequired = false;
@@ -2809,7 +2809,7 @@ namespace TMPro
                     if (charCode == '<')
                         charCode = 57344 + (uint)m_spriteIndex;
                     else
-                        m_spriteColor = s_colorWhite;
+                        m_spriteColor = s_color32White;
 
                     float fontScale = (m_currentFontSize / m_currentFontAsset.faceInfo.pointSize * m_currentFontAsset.faceInfo.scale * (m_isOrthographic ? 1 : 0.1f));
 

@@ -282,7 +282,7 @@ namespace TMPro
             float ratio_B = 1;
             float ratio_C = 1;
 
-            bool isRatioEnabled = !mat.shaderKeywords.Contains(Keyword_Ratios);
+            bool isRatioEnabled = !mat.IsKeywordEnabled(Keyword_Ratios);
 
             if (!mat.HasProperty(ID_GradientScale) || !mat.HasProperty(ID_FaceDilate))
                 return;
@@ -374,7 +374,7 @@ namespace TMPro
             if (material == null || !material.HasProperty(ShaderUtilities.ID_ClipRect))
                 return false;
 
-            if (material.shaderKeywords.Contains(ShaderUtilities.Keyword_MASK_SOFT) || material.shaderKeywords.Contains(ShaderUtilities.Keyword_MASK_HARD) || material.shaderKeywords.Contains(ShaderUtilities.Keyword_MASK_TEX))
+            if (material.IsKeywordEnabled(ShaderUtilities.Keyword_MASK_SOFT) || material.IsKeywordEnabled(ShaderUtilities.Keyword_MASK_HARD) || material.IsKeywordEnabled(ShaderUtilities.Keyword_MASK_TEX))
                 return true;
 
             return false;
@@ -382,7 +382,7 @@ namespace TMPro
 
 
         // Function to determine how much extra padding is required as a result of material properties like dilate, outline thickness, softness, glow, etc...
-        public static float GetPadding(Material material, bool enableExtraPadding, bool isBold)
+        public static float GetPadding(Material material, bool enableExtraPadding)
         {
             //Debug.Log("GetPadding() called.");
 
@@ -430,8 +430,6 @@ namespace TMPro
             // Update Shader Ratios prior to computing padding
             UpdateShaderRatios(material);
 
-            string[] shaderKeywords = material.shaderKeywords;
-
             if (material.HasProperty(ID_ScaleRatio_A))
                 scaleRatio_A = material.GetFloat(ID_ScaleRatio_A);
 
@@ -449,7 +447,7 @@ namespace TMPro
             uniformPadding = outlineThickness + faceSoftness + faceDilate;
 
             // Glow padding contribution
-            if (material.HasProperty(ID_GlowOffset) && shaderKeywords.Contains(Keyword_Glow)) // Generates GC
+            if (material.HasProperty(ID_GlowOffset) && material.IsKeywordEnabled(Keyword_Glow)) // Generates GC
             {
                 if (material.HasProperty(ID_ScaleRatio_B))
                     scaleRatio_B = material.GetFloat(ID_ScaleRatio_B);
@@ -461,7 +459,7 @@ namespace TMPro
             uniformPadding = Mathf.Max(uniformPadding, faceDilate + glowOffset + glowOuter);
 
             // Underlay padding contribution
-            if (material.HasProperty(ID_UnderlaySoftness) && shaderKeywords.Contains(Keyword_Underlay)) // Generates GC
+            if (material.HasProperty(ID_UnderlaySoftness) && material.IsKeywordEnabled(Keyword_Underlay)) // Generates GC
             {
                 if (material.HasProperty(ID_ScaleRatio_C))
                     scaleRatio_C = material.GetFloat(ID_ScaleRatio_C);
@@ -623,7 +621,7 @@ namespace TMPro
                 uniformPadding = outlineThickness + faceSoftness + faceDilate;
 
                 // Glow padding contribution
-                if (materials[i].HasProperty(ShaderUtilities.ID_GlowOffset) && shaderKeywords.Contains(ShaderUtilities.Keyword_Glow))
+                if (materials[i].HasProperty(ShaderUtilities.ID_GlowOffset) && materials[i].IsKeywordEnabled(ShaderUtilities.Keyword_Glow))
                 {
                     if (materials[i].HasProperty(ShaderUtilities.ID_ScaleRatio_B))
                         scaleRatio_B = materials[i].GetFloat(ShaderUtilities.ID_ScaleRatio_B);
@@ -635,7 +633,7 @@ namespace TMPro
                 uniformPadding = Mathf.Max(uniformPadding, faceDilate + glowOffset + glowOuter);
 
                 // Underlay padding contribution
-                if (materials[i].HasProperty(ShaderUtilities.ID_UnderlaySoftness) && shaderKeywords.Contains(ShaderUtilities.Keyword_Underlay))
+                if (materials[i].HasProperty(ShaderUtilities.ID_UnderlaySoftness) && materials[i].IsKeywordEnabled(ShaderUtilities.Keyword_Underlay))
                 {
                     if (materials[i].HasProperty(ShaderUtilities.ID_ScaleRatio_C))
                         scaleRatio_C = materials[i].GetFloat(ShaderUtilities.ID_ScaleRatio_C);

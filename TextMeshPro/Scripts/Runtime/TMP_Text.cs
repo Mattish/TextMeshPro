@@ -196,6 +196,7 @@ namespace TMPro
         protected Material m_currentMaterial;
         protected static MaterialReference[] m_materialReferences = new MaterialReference[4];
         protected static SpeedictPointerLess<int> m_materialReferenceIndexLookup = new(8);
+        protected static SpeedictPointerLess<float> m_paddingCachedLookup = new(8);
 
         protected static TMP_TextProcessingStack<MaterialReference> m_materialReferenceStack = new TMP_TextProcessingStack<MaterialReference>(new MaterialReference[16]);
         protected int m_currentMaterialIndex;
@@ -264,13 +265,13 @@ namespace TMPro
         }
         //[UnityEngine.Serialization.FormerlySerializedAs("m_fontColor")] // Required for backwards compatibility with pre-Unity 4.6 releases.
         [SerializeField]
-        protected Color32 m_fontColor32 = Color.white;
+        protected Color32 m_fontColor32 = new Color32(byte.MaxValue, byte.MaxValue, byte.MaxValue, byte.MaxValue);
         [SerializeField]
         protected Color m_fontColor = Color.white;
-        protected static Color32 s_colorWhite = new Color32(255, 255, 255, 255);
-        protected Color32 m_underlineColor = s_colorWhite;
-        protected Color32 m_strikethroughColor = s_colorWhite;
-        internal HighlightState m_HighlightState = new HighlightState(s_colorWhite, TMP_Offset.zero);
+        protected static Color32 s_color32White = new Color32(255, 255, 255, 255);
+        protected Color32 m_underlineColor = s_color32White;
+        protected Color32 m_strikethroughColor = s_color32White;
+        internal HighlightState m_HighlightState = new HighlightState(s_color32White, TMP_Offset.zero);
         internal bool m_ConvertToLinearSpace;
 
         /// <summary>
@@ -411,7 +412,7 @@ namespace TMPro
             set { if(m_faceColor.Compare(value)) return; SetFaceColor(value); m_havePropertiesChanged = true; m_faceColor = value; SetVerticesDirty(); SetMaterialDirty(); }
         }
         [SerializeField]
-        protected Color32 m_faceColor = Color.white;
+        protected Color32 m_faceColor = s_color32White;
 
 
         /// <summary>
@@ -430,7 +431,7 @@ namespace TMPro
             set { if(m_outlineColor.Compare(value)) return; SetOutlineColor(value); m_havePropertiesChanged = true; m_outlineColor = value; SetVerticesDirty(); }
         }
         //[SerializeField]
-        protected Color32 m_outlineColor = Color.black;
+        protected Color32 m_outlineColor = new Color32(0, 0, 0, byte.MaxValue);
 
 
         /// <summary>
@@ -1632,14 +1633,14 @@ namespace TMPro
 
 
         // Fields used for vertex colors
-        protected Color32 m_htmlColor = new Color(255, 255, 255, 128);
-        protected TMP_TextProcessingStack<Color32> m_colorStack = new TMP_TextProcessingStack<Color32>(new Color32[16]);
-        protected TMP_TextProcessingStack<Color32> m_underlineColorStack = new TMP_TextProcessingStack<Color32>(new Color32[16]);
-        protected TMP_TextProcessingStack<Color32> m_strikethroughColorStack = new TMP_TextProcessingStack<Color32>(new Color32[16]);
-        protected TMP_TextProcessingStack<HighlightState> m_HighlightStateStack = new TMP_TextProcessingStack<HighlightState>(new HighlightState[16]);
+        protected Color32 m_htmlColor = new Color32(255, 255, 255, 128);
+        protected TMP_TextProcessingStack<Color32> m_colorStack = new TMP_TextProcessingStack<Color32>(Array.Empty<Color32>());
+        protected TMP_TextProcessingStack<Color32> m_underlineColorStack = new TMP_TextProcessingStack<Color32>(Array.Empty<Color32>());
+        protected TMP_TextProcessingStack<Color32> m_strikethroughColorStack = new TMP_TextProcessingStack<Color32>(Array.Empty<Color32>());
+        protected TMP_TextProcessingStack<HighlightState> m_HighlightStateStack = new TMP_TextProcessingStack<HighlightState>(Array.Empty<HighlightState>());
 
         protected TMP_ColorGradient m_colorGradientPreset;
-        protected TMP_TextProcessingStack<TMP_ColorGradient> m_colorGradientStack = new TMP_TextProcessingStack<TMP_ColorGradient>(new TMP_ColorGradient[16]);
+        protected TMP_TextProcessingStack<TMP_ColorGradient> m_colorGradientStack = new TMP_TextProcessingStack<TMP_ColorGradient>(Array.Empty<TMP_ColorGradient>());
         protected bool m_colorGradientPresetIsTinted;
 
         protected float m_tabSpacing = 0;
@@ -1649,14 +1650,14 @@ namespace TMPro
         protected TMP_TextProcessingStack<int>[] m_TextStyleStacks = new TMP_TextProcessingStack<int>[8];
         protected int m_TextStyleStackDepth = 0;
 
-        protected TMP_TextProcessingStack<int> m_ItalicAngleStack = new TMP_TextProcessingStack<int>(new int[16]);
+        protected TMP_TextProcessingStack<int> m_ItalicAngleStack = new TMP_TextProcessingStack<int>(Array.Empty<int>());
         protected int m_ItalicAngle;
 
-        protected TMP_TextProcessingStack<int> m_actionStack = new TMP_TextProcessingStack<int>(new int[16]);
+        protected TMP_TextProcessingStack<int> m_actionStack = new TMP_TextProcessingStack<int>(Array.Empty<int>());
 
         protected float m_padding = 0;
         protected float m_baselineOffset; // Used for superscript and subscript.
-        protected TMP_TextProcessingStack<float> m_baselineOffsetStack = new TMP_TextProcessingStack<float>(new float[16]);
+        protected TMP_TextProcessingStack<float> m_baselineOffsetStack = new TMP_TextProcessingStack<float>(Array.Empty<float>());
         protected float m_xAdvance; // Tracks x advancement from character to character.
 
         protected TMP_TextElementType m_textElementType;
@@ -1800,32 +1801,41 @@ namespace TMPro
         /// Get the padding value for the currently assigned material
         /// </summary>
         /// <returns></returns>
-        protected virtual float GetPaddingForMaterial()
+        protected virtual float GetPaddingForMaterial(bool allowCachedValue = false)
         {
             ShaderUtilities.GetShaderPropertyIDs();
-
-            if(m_sharedMaterial == null) return 0;
-
-            m_padding = ShaderUtilities.GetPadding(m_sharedMaterial, m_enableExtraPadding, m_isUsingBold);
-            m_isMaskingEnabled = ShaderUtilities.IsMaskingEnabled(m_sharedMaterial);
-            m_isSDFShader = m_sharedMaterial.HasProperty(ShaderUtilities.ID_WeightNormal);
-
-            return m_padding;
+            return GetPaddingForMaterial(m_sharedMaterial, allowCachedValue);
         }
-
 
         /// <summary>
         /// Get the padding value for the given material
         /// </summary>
         /// <returns></returns>
-        protected virtual float GetPaddingForMaterial(Material mat)
+        protected virtual float GetPaddingForMaterial(Material mat, bool allowCachedValue = false)
         {
             if(mat == null)
+            {
                 return 0;
+            }
 
-            m_padding = ShaderUtilities.GetPadding(mat, m_enableExtraPadding, m_isUsingBold);
-            m_isMaskingEnabled = ShaderUtilities.IsMaskingEnabled(m_sharedMaterial);
+            int hashcode = HashCode.Combine(mat, m_enableExtraPadding);
+            if(allowCachedValue)
+            {
+                float cachedPaddingResult = m_paddingCachedLookup.TryGet(hashcode, out bool success);
+                if(success)
+                {
+                    m_padding = cachedPaddingResult;
+                    m_isMaskingEnabled = ShaderUtilities.IsMaskingEnabled(mat);
+                    m_isSDFShader = mat.HasProperty(ShaderUtilities.ID_WeightNormal);
+                    return m_padding;
+                }
+            }
+
+            m_padding = ShaderUtilities.GetPadding(mat, m_enableExtraPadding);
+            m_isMaskingEnabled = ShaderUtilities.IsMaskingEnabled(mat);
             m_isSDFShader = mat.HasProperty(ShaderUtilities.ID_WeightNormal);
+
+            m_paddingCachedLookup.Add(hashcode, m_padding);
 
             return m_padding;
         }
@@ -6634,7 +6644,7 @@ namespace TMPro
                 return new Color32(r, g, b, a);
             }
 
-            return s_colorWhite;
+            return s_color32White;
         }
 
 
@@ -7989,7 +7999,7 @@ namespace TMPro
                             m_spriteIndex = index;
                         }
 
-                        m_spriteColor = s_colorWhite;
+                        m_spriteColor = s_color32White;
                         m_tintSprite = false;
 
                         // Handle Sprite Tag Attributes

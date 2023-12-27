@@ -335,7 +335,7 @@ namespace TMPro
         /// </summary>
         public override void UpdateMeshPadding()
         {
-            m_padding = ShaderUtilities.GetPadding(m_sharedMaterial, m_enableExtraPadding, m_isUsingBold);
+            m_padding = ShaderUtilities.GetPadding(m_sharedMaterial, m_enableExtraPadding);
             m_isMaskingEnabled = ShaderUtilities.IsMaskingEnabled(m_sharedMaterial);
             m_havePropertiesChanged = true;
             checkPaddingRequired = false;
@@ -614,12 +614,12 @@ namespace TMPro
 
 #if UNITY_EDITOR
             // Special handling for the CanvasRenderer which used to be automatically added by the Graphic class.
-            CanvasRenderer canvasRendererComponent = GetComponent<CanvasRenderer>();
-            if(canvasRendererComponent != null)
-            {
-                Debug.LogWarning("Please remove the CanvasRenderer component from the [" + this.name + "] GameObject as this component is no longer necessary.", this);
-                canvasRendererComponent.hideFlags = HideFlags.None;
-            }
+            // CanvasRenderer canvasRendererComponent = GetComponent<CanvasRenderer>();
+            // if(canvasRendererComponent != null)
+            // {
+            //     Debug.LogWarning("Please remove the CanvasRenderer component from the [" + this.name + "] GameObject as this component is no longer necessary.", this);
+            //     canvasRendererComponent.hideFlags = HideFlags.None;
+            // }
 #endif
 
             // Load TMP Settings for new text object instances.
@@ -1000,7 +1000,7 @@ namespace TMPro
                 }
             }
 
-            m_padding = GetPaddingForMaterial();
+            m_padding = GetPaddingForMaterial(true);
             m_isMaskingEnabled = ShaderUtilities.IsMaskingEnabled(m_sharedMaterial);
 
             // Find and cache Underline & Ellipsis characters.
@@ -2497,7 +2497,7 @@ namespace TMPro
                     if(charCode == '<')
                         charCode = 57344 + (uint)m_spriteIndex;
                     else
-                        m_spriteColor = s_colorWhite;
+                        m_spriteColor = s_color32White;
 
                     float fontScale = (m_currentFontSize / m_currentFontAsset.faceInfo.pointSize * m_currentFontAsset.faceInfo.scale * (m_isOrthographic ? 1 : 0.1f));
 

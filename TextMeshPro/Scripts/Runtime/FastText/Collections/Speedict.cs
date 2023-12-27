@@ -17,7 +17,7 @@ namespace TMPro.Collections
             int targetLength = capacity < 8 ? 8 : capacity;
             probeMax = BitwiseLog2(targetLength);
             buffer = new (long, long, TValue)[targetLength + probeMax];
-            resizeThreshold = (int)(buffer.Length * 0.5);
+            resizeThreshold = (int)(buffer.Length * 0.7);
             longLengthMinusOne = targetLength - 1;
             Array.Fill(buffer, (long.MaxValue, long.MaxValue, default));
         }
@@ -135,7 +135,7 @@ start:
             long newSize = (longLengthMinusOne + 1) * 2;
 
             var oldBuffer = buffer;
-            resizeThreshold = (int)(newSize * 0.5);
+            resizeThreshold = (int)(newSize * 0.7);
             probeMax = BitwiseLog2((int)newSize);
             buffer = new (long, long, TValue)[(int)(newSize + probeMax)];
             longLengthMinusOne = newSize - 1;

@@ -39,11 +39,11 @@ namespace TMPro
         // Default Constructor
         public TMP_TextInfo()
         {
-            characterInfo = new TMP_CharacterInfo[8];
-            wordInfo = new TMP_WordInfo[16];
-            linkInfo = new TMP_LinkInfo[0];
-            lineInfo = new TMP_LineInfo[2];
-            pageInfo = new TMP_PageInfo[4];
+            characterInfo = Array.Empty<TMP_CharacterInfo>();
+            wordInfo = Array.Empty<TMP_WordInfo>();
+            linkInfo = Array.Empty<TMP_LinkInfo>();
+            lineInfo = Array.Empty<TMP_LineInfo>();
+            pageInfo = Array.Empty<TMP_PageInfo>();
 
             meshInfo = new TMP_MeshInfo[1];
         }
@@ -51,10 +51,10 @@ namespace TMPro
         internal TMP_TextInfo(int characterCount)
         {
             characterInfo = new TMP_CharacterInfo[characterCount];
-            wordInfo = new TMP_WordInfo[16];
-            linkInfo = new TMP_LinkInfo[0];
-            lineInfo = new TMP_LineInfo[2];
-            pageInfo = new TMP_PageInfo[4];
+            wordInfo = Array.Empty<TMP_WordInfo>();
+            linkInfo = Array.Empty<TMP_LinkInfo>();
+            lineInfo = Array.Empty<TMP_LineInfo>();
+            pageInfo = Array.Empty<TMP_PageInfo>();
 
             meshInfo = new TMP_MeshInfo[1];
         }
@@ -63,13 +63,11 @@ namespace TMPro
         {
             this.textComponent = textComponent;
 
-            characterInfo = new TMP_CharacterInfo[8];
-
-            wordInfo = new TMP_WordInfo[4];
-            linkInfo = new TMP_LinkInfo[0];
-
-            lineInfo = new TMP_LineInfo[2];
-            pageInfo = new TMP_PageInfo[4];
+            characterInfo = Array.Empty<TMP_CharacterInfo>();
+            wordInfo = Array.Empty<TMP_WordInfo>();
+            linkInfo = Array.Empty<TMP_LinkInfo>();
+            lineInfo = Array.Empty<TMP_LineInfo>();
+            pageInfo = Array.Empty<TMP_PageInfo>();
 
             meshInfo = new TMP_MeshInfo[1];
             meshInfo[0].mesh = textComponent.mesh;
@@ -283,7 +281,7 @@ namespace TMPro
         /// <typeparam name="T"></typeparam>
         /// <param name="array"></param>
         /// <param name="size"></param>
-        public static void Resize<T> (ref T[] array, int size)
+        public static void Resize<T>(ref T[] array, int size)
         {
             // Allocated to the next power of two
             int newSize = size > 1024 ? size + 256 : Mathf.NextPowerOfTwo(size);
